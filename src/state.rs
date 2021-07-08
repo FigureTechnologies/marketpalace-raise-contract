@@ -15,6 +15,7 @@ pub struct State {
     pub target: Coin,
     pub min_commitment: Coin,
     pub max_commitment: Coin,
+    pub pending_capital_promises: Vec<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

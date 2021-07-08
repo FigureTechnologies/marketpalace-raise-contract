@@ -32,6 +32,7 @@ pub fn instantiate(
         target: msg.target.clone(),
         min_commitment: msg.min_commitment.clone(),
         max_commitment: msg.max_commitment.clone(),
+        pending_capital_promises: vec![],
     };
     config(deps.storage).save(&state)?;
 
@@ -109,15 +110,15 @@ pub struct CapitalPromiseState {
 
 #[derive(Deserialize, PartialEq)]
 pub enum CapitalPromiseStatus {
-    Proposed,
-    ContractAccepted,
-    GPAccepted,
+    Draft,
+    Pending,
+    Accepted,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CapitalPromiseMsg {
-    ContractAccept {},
+    SubmitPending {},
 }
 
 pub fn try_propose_capital_promise(
@@ -167,13 +168,18 @@ pub fn try_propose_capital_promise(
         ));
     }
 
-    if contract.status != CapitalPromiseStatus::Proposed {
-        return Err(contract_error("capital promise not in proposed status"));
+    if contract.status != CapitalPromiseStatus::Draft {
+        return Err(contract_error("capital promise not in draft status"));
     }
+
+    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+        state.pending_capital_promises.push(capital_promise_address.clone());
+        Ok(state)
+    })?;
 
     let accept = wasm_execute(
         capital_promise_address,
-        &CapitalPromiseMsg::ContractAccept {},
+        &CapitalPromiseMsg::SubmitPending {},
         vec![],
     )?;
 
