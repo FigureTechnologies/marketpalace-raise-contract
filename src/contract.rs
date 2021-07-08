@@ -1,8 +1,11 @@
 use cosmwasm_std::{
-    entry_point, to_binary, from_slice, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, QuerierWrapper
+    entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps,
+    DepsMut, Env, MessageInfo, QuerierWrapper, Response, StdError, StdResult,
 };
-use provwasm_std::{create_marker, mint_marker_supply, withdraw_coins, ProvenanceMsg, ProvenanceQuerier, MarkerType};
-use serde::Deserialize;
+use provwasm_std::{
+    create_marker, mint_marker_supply, withdraw_coins, MarkerType, ProvenanceMsg, ProvenanceQuerier,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::error::ContractError;
 use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg};
@@ -32,17 +35,19 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    if msg.target.denom != msg.min_commitment.denom || msg.min_commitment.denom != msg.max_commitment.denom {
-        return Err(contract_error("denoms do not match between target, min and max commitments"))
+    if msg.target.denom != msg.min_commitment.denom
+        || msg.min_commitment.denom != msg.max_commitment.denom
+    {
+        return Err(contract_error(
+            "denoms do not match between target, min and max commitments",
+        ));
     }
 
     let create = create_marker(msg.target.amount.u128(), msg.denom, MarkerType::Restricted)?;
 
     Ok(Response {
         submessages: vec![],
-        messages: vec![
-            create,
-        ],
+        messages: vec![create],
         attributes: vec![],
         data: Option::None,
     })
@@ -55,10 +60,12 @@ pub fn execute(
     _env: Env,
     info: MessageInfo,
     msg: HandleMsg,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> Result<Response<CosmosMsg>, ContractError> {
     match msg {
         HandleMsg::Activate {} => try_activate(deps, _env, info),
-        HandleMsg::ProposeCapitalPromise { capital_promise_address } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
+        HandleMsg::ProposeCapitalPromise {
+            capital_promise_address,
+        } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
     }
 }
 
@@ -66,15 +73,15 @@ pub fn try_activate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if state.status != Status::Proposed {
-        return Err(contract_error("contract no longer proposed"))
+        return Err(contract_error("contract no longer proposed"));
     }
 
     if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can activate"))
+        return Err(contract_error("only gp or admin can activate"));
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -92,11 +99,24 @@ pub fn try_activate(
 
 #[derive(Deserialize)]
 pub struct CapitalPromiseState {
-    pub status: Status,
+    pub status: CapitalPromiseStatus,
     pub raise_contract_address: Addr,
     pub admin: Addr,
     pub min_commitment: Coin,
     pub max_commitment: Coin,
+}
+
+#[derive(Deserialize, PartialEq)]
+pub enum CapitalPromiseStatus {
+    Proposed,
+    ContractAccepted,
+    GPAccepted,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapitalPromiseMsg {
+    ContractAccept {},
 }
 
 pub fn try_propose_capital_promise(
@@ -104,34 +124,57 @@ pub fn try_propose_capital_promise(
     _env: Env,
     info: MessageInfo,
     capital_promise_address: Addr,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if state.status != Status::Active {
-        return Err(contract_error("contract is not active"))
+        return Err(contract_error("contract is not active"));
     }
 
-    let contract: CapitalPromiseState = from_slice(&deps.querier.query_wasm_raw(capital_promise_address, CONFIG_KEY)?.unwrap())?;
-    
+    let contract: CapitalPromiseState = from_slice(
+        &deps
+            .querier
+            .query_wasm_raw(capital_promise_address.clone(), CONFIG_KEY)?
+            .unwrap(),
+    )?;
+
     if contract.raise_contract_address != _env.contract.address {
-        return Err(contract_error("incorrect raise contract address specified on capital promise"))
+        return Err(contract_error(
+            "incorrect raise contract address specified on capital promise",
+        ));
     }
 
     if contract.min_commitment.denom != state.target.denom {
-        return Err(contract_error("commitment denom doesn't match target denom"))
+        return Err(contract_error(
+            "commitment denom doesn't match target denom",
+        ));
     }
 
     if contract.max_commitment.amount < state.min_commitment.amount {
-        return Err(contract_error("capital promise max commitment is below raise minumum commitment"))
+        return Err(contract_error(
+            "capital promise max commitment is below raise minumum commitment",
+        ));
     }
 
     if contract.min_commitment.amount > state.max_commitment.amount {
-        return Err(contract_error("capital promise min commitment exceeds raise maximum commitment"))
+        return Err(contract_error(
+            "capital promise min commitment exceeds raise maximum commitment",
+        ));
     }
+
+    if contract.status != CapitalPromiseStatus::Proposed {
+        return Err(contract_error("capital promise not in proposed status"));
+    }
+
+    let accept = wasm_execute(
+        capital_promise_address,
+        &CapitalPromiseMsg::ContractAccept {},
+        vec![],
+    )?;
 
     Ok(Response {
         submessages: vec![],
-        messages: vec![],
+        messages: vec![CosmosMsg::Wasm(accept)],
         attributes: vec![],
         data: Option::None,
     })

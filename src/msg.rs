@@ -16,9 +16,7 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
     Activate {},
-    ProposeCapitalPromise {
-        capital_promise_address: Addr,
-    },
+    ProposeCapitalPromise { capital_promise_address: Addr },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
