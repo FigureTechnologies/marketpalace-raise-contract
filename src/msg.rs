@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use cosmwasm_std::{Addr, Coin};
 
@@ -18,8 +18,21 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
     Activate {},
-    ProposeCapitalPromise { capital_promise_address: Addr },
-    Accept { promises_and_commitments: HashMap<Addr, u64> },
+    ProposeCapitalPromise {
+        capital_promise_address: Addr,
+    },
+    Accept {
+        promises_and_commitments: HashMap<Addr, u64>,
+    },
+    IssueCapitalCalls {
+        capital_calls: Vec<CapitalCall>,
+    },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct CapitalCall {
+    pub promise: Addr,
+    pub amount: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::msg::CapitalCall;
 use cosmwasm_std::{
     entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps,
     DepsMut, Env, MessageInfo, QuerierWrapper, Response, StdError, StdResult,
@@ -7,6 +7,7 @@ use provwasm_std::{
     create_marker, mint_marker_supply, withdraw_coins, MarkerType, ProvenanceMsg, ProvenanceQuerier,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::error::ContractError;
 use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg};
@@ -61,7 +62,9 @@ pub fn execute(
         HandleMsg::ProposeCapitalPromise {
             capital_promise_address,
         } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
-        HandleMsg::Accept { promises_and_commitments } => try_accept(deps, _env, info, promises_and_commitments),
+        HandleMsg::Accept {
+            promises_and_commitments,
+        } => try_accept(deps, _env, info, promises_and_commitments),
     }
 }
 
@@ -117,8 +120,18 @@ pub enum CapitalPromiseStatus {
 #[serde(rename_all = "snake_case")]
 pub enum CapitalPromiseMsg {
     SubmitPending {},
-    Accept { commitment: u64 },
-    IssueCapitalCall { capital_call: u64 },
+    Accept {
+        commitment: u64,
+    },
+    IssueCapitalCall {
+        capital_call: CapitalPromiseCapitalCall,
+    },
+}
+
+#[derive(Serialize)]
+pub struct CapitalPromiseCapitalCall {
+    pub amount: u64,
+    pub days_of_notice: Option<u16>,
 }
 
 pub fn try_propose_capital_promise(
@@ -141,7 +154,9 @@ pub fn try_propose_capital_promise(
     )?;
 
     if contract.owner != info.sender {
-        return Err(contract_error("only owner of capital promise can make proposal"))
+        return Err(contract_error(
+            "only owner of capital promise can make proposal",
+        ));
     }
 
     if contract.raise_contract_address != _env.contract.address {
@@ -167,7 +182,9 @@ pub fn try_propose_capital_promise(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.pending_capital_promises.push(capital_promise_address.clone());
+        state
+            .pending_capital_promises
+            .push(capital_promise_address.clone());
         Ok(state)
     })?;
 
@@ -195,9 +212,48 @@ pub fn try_accept(
 
     Ok(Response {
         submessages: vec![],
-        messages: promises_and_commitments.into_iter().map(|(promise, commitment)| {
-            CosmosMsg::Wasm(wasm_execute(promise, &CapitalPromiseMsg::Accept { commitment }, vec![]).unwrap())
-        }).collect(),
+        messages: promises_and_commitments
+            .into_iter()
+            .map(|(promise, commitment)| {
+                CosmosMsg::Wasm(
+                    wasm_execute(promise, &CapitalPromiseMsg::Accept { commitment }, vec![])
+                        .unwrap(),
+                )
+            })
+            .collect(),
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+pub fn try_issue_capital_calls(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    capital_calls: Vec<CapitalCall>,
+) -> Result<Response<CosmosMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    Ok(Response {
+        submessages: vec![],
+        messages: capital_calls
+            .into_iter()
+            .map(|capital_call| {
+                CosmosMsg::Wasm(
+                    wasm_execute(
+                        capital_call.promise,
+                        &CapitalPromiseMsg::IssueCapitalCall {
+                            capital_call: CapitalPromiseCapitalCall {
+                                amount: capital_call.amount,
+                                days_of_notice: None,
+                            },
+                        },
+                        vec![],
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect(),
         attributes: vec![],
         data: Option::None,
     })
