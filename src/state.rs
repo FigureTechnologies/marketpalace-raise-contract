@@ -14,7 +14,7 @@ pub struct State {
     pub denom: String,
     pub target: Coin,
     pub min_commitment: Coin,
-    pub max_commitment: Option<Coin>,
+    pub max_commitment: Coin,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -1,12 +1,12 @@
-use cosmwasm_std::StdError;
 use cosmwasm_std::{
-    entry_point, to_binary, BankMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
+    entry_point, to_binary, from_slice, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, QuerierWrapper
 };
 use provwasm_std::{create_marker, mint_marker_supply, withdraw_coins, ProvenanceMsg, ProvenanceQuerier, MarkerType};
+use serde::Deserialize;
 
 use crate::error::ContractError;
 use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg};
-use crate::state::{config, config_read, State, Status};
+use crate::state::{config, config_read, State, Status, CONFIG_KEY};
 
 fn contract_error(err: &str) -> ContractError {
     ContractError::Std(StdError::generic_err(err))
@@ -27,10 +27,14 @@ pub fn instantiate(
         admin: msg.admin,
         denom: msg.denom.clone(),
         target: msg.target.clone(),
-        min_commitment: msg.min_commitment,
-        max_commitment: msg.max_commitment,
+        min_commitment: msg.min_commitment.clone(),
+        max_commitment: msg.max_commitment.clone(),
     };
     config(deps.storage).save(&state)?;
+
+    if msg.target.denom != msg.min_commitment.denom || msg.min_commitment.denom != msg.max_commitment.denom {
+        return Err(contract_error("denoms do not match between target, min and max commitments"))
+    }
 
     let create = create_marker(msg.target.amount.u128(), msg.denom, MarkerType::Restricted)?;
 
@@ -54,6 +58,7 @@ pub fn execute(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
         HandleMsg::Activate {} => try_activate(deps, _env, info),
+        HandleMsg::ProposeCapitalPromise { capital_promise_address } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
     }
 }
 
@@ -68,10 +73,61 @@ pub fn try_activate(
         return Err(contract_error("contract no longer proposed"))
     }
 
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can activate"))
+    }
+
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
         state.status = Status::Active;
         Ok(state)
     })?;
+
+    Ok(Response {
+        submessages: vec![],
+        messages: vec![],
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct CapitalPromiseState {
+    pub status: Status,
+    pub raise_contract_address: Addr,
+    pub admin: Addr,
+    pub min_commitment: Coin,
+    pub max_commitment: Coin,
+}
+
+pub fn try_propose_capital_promise(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    capital_promise_address: Addr,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    if state.status != Status::Active {
+        return Err(contract_error("contract is not active"))
+    }
+
+    let contract: CapitalPromiseState = from_slice(&deps.querier.query_wasm_raw(capital_promise_address, CONFIG_KEY)?.unwrap())?;
+    
+    if contract.raise_contract_address != _env.contract.address {
+        return Err(contract_error("incorrect raise contract address specified on capital promise"))
+    }
+
+    if contract.min_commitment.denom != state.target.denom {
+        return Err(contract_error("commitment denom doesn't match target denom"))
+    }
+
+    if contract.max_commitment.amount < state.min_commitment.amount {
+        return Err(contract_error("capital promise max commitment is below raise minumum commitment"))
+    }
+
+    if contract.min_commitment.amount > state.max_commitment.amount {
+        return Err(contract_error("capital promise min commitment exceeds raise maximum commitment"))
+    }
 
     Ok(Response {
         submessages: vec![],
@@ -227,8 +283,8 @@ mod tests {
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
             denom: String::from("funny_money"),
             target: coin(5_000_000, "stable_coin"),
-            min_commitment: coin(10000, "stable_coin"),
-            max_commitment: Option::None,
+            min_commitment: coin(10_000, "stable_coin"),
+            max_commitment: coin(100_000, "stable_coin"),
         }
     }
 

@@ -9,13 +9,16 @@ pub struct InstantiateMsg {
     pub denom: String,
     pub target: Coin,
     pub min_commitment: Coin,
-    pub max_commitment: Option<Coin>,
+    pub max_commitment: Coin,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
     Activate {},
+    ProposeCapitalPromise {
+        capital_promise_address: Addr,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
