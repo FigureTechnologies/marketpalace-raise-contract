@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +18,7 @@ pub struct InstantiateMsg {
 pub enum HandleMsg {
     Activate {},
     ProposeCapitalPromise { capital_promise_address: Addr },
+    Accept { promises_and_commitments: HashMap<Addr, Coin> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

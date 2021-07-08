@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use cosmwasm_std::{
     entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps,
     DepsMut, Env, MessageInfo, QuerierWrapper, Response, StdError, StdResult,
@@ -67,6 +68,7 @@ pub fn execute(
         HandleMsg::ProposeCapitalPromise {
             capital_promise_address,
         } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
+        HandleMsg::Accept { promises_and_commitments } = try_accept(deps, _env, info, promises_and_commitments),
     }
 }
 
@@ -119,6 +121,7 @@ pub enum CapitalPromiseStatus {
 #[serde(rename_all = "snake_case")]
 pub enum CapitalPromiseMsg {
     SubmitPending {},
+    Accept { commitment: Coin },
 }
 
 pub fn try_propose_capital_promise(
@@ -186,6 +189,22 @@ pub fn try_propose_capital_promise(
     Ok(Response {
         submessages: vec![],
         messages: vec![CosmosMsg::Wasm(accept)],
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+pub fn try_accept(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    promises_and_commitments: HashMap<Addr, Coin>,
+) -> Result<Response<CosmosMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    Ok(Response {
+        submessages: vec![],
+        messages: vec![],
         attributes: vec![],
         data: Option::None,
     })
