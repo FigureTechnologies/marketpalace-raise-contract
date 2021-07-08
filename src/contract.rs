@@ -99,6 +99,7 @@ pub fn try_activate(
 
 #[derive(Deserialize)]
 pub struct CapitalPromiseState {
+    pub owner: Addr,
     pub status: CapitalPromiseStatus,
     pub raise_contract_address: Addr,
     pub admin: Addr,
@@ -137,6 +138,10 @@ pub fn try_propose_capital_promise(
             .query_wasm_raw(capital_promise_address.clone(), CONFIG_KEY)?
             .unwrap(),
     )?;
+
+    if contract.owner != info.sender {
+        return Err(contract_error("only owner of capital promise can make proposal"))
+    }
 
     if contract.raise_contract_address != _env.contract.address {
         return Err(contract_error(
