@@ -204,7 +204,9 @@ pub fn try_accept(
 
     Ok(Response {
         submessages: vec![],
-        messages: vec![],
+        messages: promises_and_commitments.into_iter().map(|(promise, commitment)| {
+            CosmosMsg::Wasm(wasm_execute(promise, &CapitalPromiseMsg::Accept { commitment }, vec![]).unwrap())
+        }).collect(),
         attributes: vec![],
         data: Option::None,
     })
