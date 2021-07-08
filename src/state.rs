@@ -12,9 +12,9 @@ pub struct State {
     pub gp: Addr,
     pub admin: Addr,
     pub denom: String,
-    pub target: u64,
-    pub min_commitment: u64,
-    pub max_commitment: Option<u64>,
+    pub target: Coin,
+    pub min_commitment: Coin,
+    pub max_commitment: Option<Coin>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

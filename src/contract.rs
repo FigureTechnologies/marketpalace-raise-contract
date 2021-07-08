@@ -26,13 +26,13 @@ pub fn instantiate(
         gp: info.sender,
         admin: msg.admin,
         denom: msg.denom.clone(),
-        target: msg.target,
+        target: msg.target.clone(),
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
     };
     config(deps.storage).save(&state)?;
 
-    let create = create_marker(msg.target as u128, msg.denom, MarkerType::Restricted)?;
+    let create = create_marker(msg.target.amount.u128(), msg.denom, MarkerType::Restricted)?;
 
     Ok(Response {
         submessages: vec![],
@@ -218,7 +218,7 @@ fn query_status(deps: Deps) -> StdResult<Status> {
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary, Addr, Coin, CosmosMsg};
+    use cosmwasm_std::{coin, coins, from_binary, Addr, Coin, CosmosMsg};
     use provwasm_mocks::{mock_dependencies, must_read_binary_file};
     use provwasm_std::{Marker, MarkerMsgParams, ProvenanceMsgParams};
 
@@ -226,8 +226,8 @@ mod tests {
         InstantiateMsg {
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
             denom: String::from("funny_money"),
-            target: 5_000_000,
-            min_commitment: 10000,
+            target: coin(5_000_000, "stable_coin"),
+            min_commitment: coin(10000, "stable_coin"),
             max_commitment: Option::None,
         }
     }
