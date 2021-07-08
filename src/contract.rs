@@ -30,6 +30,7 @@ pub fn instantiate(
         gp: info.sender,
         admin: msg.admin,
         denom: msg.denom.clone(),
+        commitment_denom: msg.commitment_denom,
         target: msg.target.clone(),
         min_commitment: msg.min_commitment.clone(),
         max_commitment: msg.max_commitment.clone(),
@@ -37,15 +38,7 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    if msg.target.denom != msg.min_commitment.denom
-        || msg.min_commitment.denom != msg.max_commitment.denom
-    {
-        return Err(contract_error(
-            "denoms do not match between target, min and max commitments",
-        ));
-    }
-
-    let create = create_marker(msg.target.amount.u128(), msg.denom, MarkerType::Restricted)?;
+    let create = create_marker(msg.target as u128, msg.denom, MarkerType::Restricted)?;
 
     Ok(Response {
         submessages: vec![],
@@ -68,7 +61,7 @@ pub fn execute(
         HandleMsg::ProposeCapitalPromise {
             capital_promise_address,
         } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
-        HandleMsg::Accept { promises_and_commitments } = try_accept(deps, _env, info, promises_and_commitments),
+        HandleMsg::Accept { promises_and_commitments } => try_accept(deps, _env, info, promises_and_commitments),
     }
 }
 
@@ -106,8 +99,11 @@ pub struct CapitalPromiseState {
     pub status: CapitalPromiseStatus,
     pub raise_contract_address: Addr,
     pub admin: Addr,
-    pub min_commitment: Coin,
-    pub max_commitment: Coin,
+    pub commitment_denom: String,
+    pub min_commitment: u64,
+    pub max_commitment: u64,
+    pub commitment: Option<u64>,
+    pub paid: Option<u64>,
 }
 
 #[derive(Deserialize, PartialEq)]
@@ -121,7 +117,8 @@ pub enum CapitalPromiseStatus {
 #[serde(rename_all = "snake_case")]
 pub enum CapitalPromiseMsg {
     SubmitPending {},
-    Accept { commitment: Coin },
+    Accept { commitment: u64 },
+    IssueCapitalCall { capital_call: u64 },
 }
 
 pub fn try_propose_capital_promise(
@@ -153,19 +150,13 @@ pub fn try_propose_capital_promise(
         ));
     }
 
-    if contract.min_commitment.denom != state.target.denom {
-        return Err(contract_error(
-            "commitment denom doesn't match target denom",
-        ));
-    }
-
-    if contract.max_commitment.amount < state.min_commitment.amount {
+    if contract.max_commitment < state.min_commitment {
         return Err(contract_error(
             "capital promise max commitment is below raise minumum commitment",
         ));
     }
 
-    if contract.min_commitment.amount > state.max_commitment.amount {
+    if contract.min_commitment > state.max_commitment {
         return Err(contract_error(
             "capital promise min commitment exceeds raise maximum commitment",
         ));
@@ -198,7 +189,7 @@ pub fn try_accept(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    promises_and_commitments: HashMap<Addr, Coin>,
+    promises_and_commitments: HashMap<Addr, u64>,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -357,9 +348,10 @@ mod tests {
         InstantiateMsg {
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
             denom: String::from("funny_money"),
-            target: coin(5_000_000, "stable_coin"),
-            min_commitment: coin(10_000, "stable_coin"),
-            max_commitment: coin(100_000, "stable_coin"),
+            commitment_denom: String::from("stable_coin"),
+            target: 5_000_000,
+            min_commitment: 10_000,
+            max_commitment: 100_000,
         }
     }
 

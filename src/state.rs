@@ -12,9 +12,10 @@ pub struct State {
     pub gp: Addr,
     pub admin: Addr,
     pub denom: String,
-    pub target: Coin,
-    pub min_commitment: Coin,
-    pub max_commitment: Coin,
+    pub commitment_denom: String,
+    pub target: u64,
+    pub min_commitment: u64,
+    pub max_commitment: u64,
     pub pending_capital_promises: Vec<Addr>,
 }
 
