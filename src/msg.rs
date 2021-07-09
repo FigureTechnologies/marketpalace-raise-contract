@@ -8,7 +8,7 @@ use cosmwasm_std::{Addr, Coin};
 pub struct InstantiateMsg {
     pub admin: Addr,
     pub denom: String,
-    pub commitment_denom: String,
+    pub capital_denom: String,
     pub target: u64,
     pub min_commitment: u64,
     pub max_commitment: u64,
@@ -17,8 +17,8 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    ProposeCapitalPromise {
-        capital_promise_address: Addr,
+    ProposeSubscription {
+        subscription: Addr,
     },
     Accept {
         promises_and_commitments: HashMap<Addr, u64>,

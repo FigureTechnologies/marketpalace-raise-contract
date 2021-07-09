@@ -31,11 +31,11 @@ pub fn instantiate(
         gp: info.sender,
         admin: msg.admin,
         denom: msg.denom.clone(),
-        commitment_denom: msg.commitment_denom,
+        capital_denom: msg.capital_denom,
         target: msg.target.clone(),
         min_commitment: msg.min_commitment.clone(),
         max_commitment: msg.max_commitment.clone(),
-        pending_capital_promises: vec![],
+        pending_review_subs: vec![],
     };
     config(deps.storage).save(&state)?;
 
@@ -64,9 +64,9 @@ pub fn execute(
     msg: HandleMsg,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     match msg {
-        HandleMsg::ProposeCapitalPromise {
-            capital_promise_address,
-        } => try_propose_capital_promise(deps, _env, info, capital_promise_address),
+        HandleMsg::ProposeSubscription {
+            subscription,
+        } => try_propose_subscription(deps, _env, info, subscription),
         HandleMsg::Accept {
             promises_and_commitments,
         } => try_accept(deps, _env, info, promises_and_commitments),
@@ -74,9 +74,9 @@ pub fn execute(
 }
 
 #[derive(Deserialize)]
-pub struct CapitalPromiseState {
+pub struct SubscriptionState {
     pub owner: Addr,
-    pub status: CapitalPromiseStatus,
+    pub status: SubscriptionStatus,
     pub raise_contract_address: Addr,
     pub admin: Addr,
     pub commitment_denom: String,
@@ -87,16 +87,16 @@ pub struct CapitalPromiseState {
 }
 
 #[derive(Deserialize, PartialEq)]
-pub enum CapitalPromiseStatus {
+pub enum SubscriptionStatus {
     Draft,
-    Pending,
+    PendingReview,
     Accepted,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CapitalPromiseMsg {
-    SubmitPending {},
+pub enum SubscriptionMsg {
+    SubmitPendingReview {},
     Accept {
         commitment: u64,
     },
@@ -111,11 +111,11 @@ pub struct CapitalPromiseCapitalCall {
     pub days_of_notice: Option<u16>,
 }
 
-pub fn try_propose_capital_promise(
+pub fn try_propose_subscription(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    capital_promise_address: Addr,
+    subscription: Addr,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -123,10 +123,10 @@ pub fn try_propose_capital_promise(
         return Err(contract_error("contract is not active"));
     }
 
-    let contract: CapitalPromiseState = from_slice(
+    let contract: SubscriptionState = from_slice(
         &deps
             .querier
-            .query_wasm_raw(capital_promise_address.clone(), CONFIG_KEY)?
+            .query_wasm_raw(subscription.clone(), CONFIG_KEY)?
             .unwrap(),
     )?;
 
@@ -154,20 +154,20 @@ pub fn try_propose_capital_promise(
         ));
     }
 
-    if contract.status != CapitalPromiseStatus::Draft {
+    if contract.status != SubscriptionStatus::Draft {
         return Err(contract_error("capital promise not in draft status"));
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
         state
-            .pending_capital_promises
-            .push(capital_promise_address.clone());
+            .pending_review_subs
+            .push(subscription.clone());
         Ok(state)
     })?;
 
     let accept = wasm_execute(
-        capital_promise_address,
-        &CapitalPromiseMsg::SubmitPending {},
+        subscription,
+        &SubscriptionMsg::SubmitPendingReview {},
         vec![],
     )?;
 
@@ -193,7 +193,7 @@ pub fn try_accept(
             .into_iter()
             .map(|(promise, commitment)| {
                 CosmosMsg::Wasm(
-                    wasm_execute(promise, &CapitalPromiseMsg::Accept { commitment }, vec![])
+                    wasm_execute(promise, &SubscriptionMsg::Accept { commitment }, vec![])
                         .unwrap(),
                 )
             })
@@ -219,7 +219,7 @@ pub fn try_issue_capital_calls(
                 CosmosMsg::Wasm(
                     wasm_execute(
                         capital_call.promise,
-                        &CapitalPromiseMsg::IssueCapitalCall {
+                        &SubscriptionMsg::IssueCapitalCall {
                             capital_call: CapitalPromiseCapitalCall {
                                 amount: capital_call.amount,
                                 days_of_notice: None,
@@ -260,7 +260,7 @@ mod tests {
         InstantiateMsg {
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
             denom: String::from("funny_money"),
-            commitment_denom: String::from("stable_coin"),
+            capital_denom: String::from("stable_coin"),
             target: 5_000_000,
             min_commitment: 10_000,
             max_commitment: 100_000,

@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Addr, Coin, Storage};
+use cosmwasm_std::{Addr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 
 pub static CONFIG_KEY: &[u8] = b"config";
@@ -12,11 +12,11 @@ pub struct State {
     pub gp: Addr,
     pub admin: Addr,
     pub denom: String,
-    pub commitment_denom: String,
+    pub capital_denom: String,
     pub target: u64,
     pub min_commitment: u64,
     pub max_commitment: u64,
-    pub pending_capital_promises: Vec<Addr>,
+    pub pending_review_subs: Vec<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
