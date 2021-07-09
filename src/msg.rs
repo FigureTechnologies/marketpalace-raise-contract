@@ -17,15 +17,11 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    Activate {},
     ProposeCapitalPromise {
         capital_promise_address: Addr,
     },
     Accept {
         promises_and_commitments: HashMap<Addr, u64>,
-    },
-    IssueCapitalCalls {
-        capital_calls: Vec<CapitalCall>,
     },
 }
 
