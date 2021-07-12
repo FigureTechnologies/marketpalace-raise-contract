@@ -1,4 +1,3 @@
-use crate::msg::CapitalCall;
 use cosmwasm_std::{
     entry_point, from_slice, to_binary, wasm_execute, Addr, Binary, CosmosMsg, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult,
@@ -70,6 +69,9 @@ pub fn execute(
         HandleMsg::AcceptSubscriptions {
             subscriptions,
         } => try_accept_subscriptions(deps, _env, info, subscriptions),
+        HandleMsg::IssueCalls {
+            calls,
+        } => try_issue_calls(deps, _env, info, calls),
     }
 }
 
@@ -207,25 +209,29 @@ pub fn try_accept_subscriptions(
     })
 }
 
-pub fn try_issue_capital_calls(
+pub fn try_issue_calls(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    capital_calls: Vec<CapitalCall>,
+    calls: HashMap<Addr, u64>,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can accept subscriptions"));
+    }
+
     Ok(Response {
         submessages: vec![],
-        messages: capital_calls
+        messages: calls
             .into_iter()
-            .map(|capital_call| {
+            .map(|(subscription, amount)| {
                 CosmosMsg::Wasm(
                     wasm_execute(
-                        capital_call.promise,
+                        subscription,
                         &SubscriptionMsg::IssueCapitalCall {
                             capital_call: CapitalPromiseCapitalCall {
-                                amount: capital_call.amount,
+                                amount,
                                 days_of_notice: None,
                             },
                         },

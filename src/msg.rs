@@ -23,12 +23,9 @@ pub enum HandleMsg {
     AcceptSubscriptions {
         subscriptions: HashMap<Addr, u64>,
     },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct CapitalCall {
-    pub promise: Addr,
-    pub amount: u64,
+    IssueCalls {
+        calls: HashMap<Addr, u64>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
