@@ -12,7 +12,7 @@ pub struct State {
     pub capital_call_code_id: u64,
     pub gp: Addr,
     pub admin: Addr,
-    pub denom: String,
+    pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,
     pub min_commitment: u64,

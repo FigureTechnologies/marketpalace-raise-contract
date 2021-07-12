@@ -30,7 +30,7 @@ pub fn instantiate(
         capital_call_code_id: msg.capital_call_code_id,
         gp: info.sender,
         admin: msg.admin,
-        denom: msg.denom.clone(),
+        asset_denom: msg.asset_denom.clone(),
         capital_denom: msg.capital_denom,
         target: msg.target.clone(),
         min_commitment: msg.min_commitment.clone(),
@@ -39,13 +39,13 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    let create = create_marker(msg.target as u128, msg.denom, MarkerType::Restricted)?;
+    let create = create_marker(msg.target as u128, msg.asset_denom, MarkerType::Restricted)?;
     let grant = grant_marker_access(
-        state.denom.clone(),
+        state.asset_denom.clone(),
         _env.contract.address,
         vec![MarkerAccess::Admin, MarkerAccess::Mint, MarkerAccess::Burn],
     )?;
-    let activate = activate_marker(state.denom)?;
+    let activate = activate_marker(state.asset_denom)?;
 
     Ok(Response {
         submessages: vec![],
@@ -114,7 +114,8 @@ pub struct CapitalCallState {
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateCapitalCallMsg {
     pub subscription: Addr,
-    pub amount: Coin,
+    pub capital: Coin,
+    pub asset: Coin,
 }
 
 #[derive(Serialize)]
@@ -241,7 +242,8 @@ pub fn try_issue_calls(
                     state.capital_call_code_id,
                     &InstantiateCapitalCallMsg {
                         subscription,
-                        amount: coin(amount as u128, state.capital_denom.clone()),
+                        capital: coin(amount as u128, state.capital_denom.clone()),
+                        asset: coin(amount as u128, state.asset_denom.clone()),
                     },
                     vec![],
                     String::from("raise contract instantiated cap call"),
@@ -274,7 +276,7 @@ pub fn try_authorize_call(
     )?;
 
     let grant = grant_marker_access(
-        state.denom.clone(),
+        state.asset_denom.clone(),
         _env.contract.address,
         vec![MarkerAccess::Withdraw],
     )?;
@@ -347,7 +349,7 @@ mod tests {
         InstantiateMsg {
             capital_call_code_id: 117,
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
-            denom: String::from("funny_money"),
+            asset_denom: String::from("funny_money"),
             capital_denom: String::from("stable_coin"),
             target: 5_000_000,
             min_commitment: 10_000,
