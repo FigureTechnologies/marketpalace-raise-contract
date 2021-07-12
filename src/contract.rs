@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, CosmosMsg,
+    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, Coin, CosmosMsg,
     Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
@@ -113,9 +113,8 @@ pub struct CapitalCallState {
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateCapitalCallMsg {
-    pub raise: Addr,
     pub subscription: Addr,
-    pub amount: u64,
+    pub amount: Coin,
 }
 
 #[derive(Serialize)]
@@ -241,9 +240,8 @@ pub fn try_issue_calls(
                 wasm_instantiate(
                     state.capital_call_code_id,
                     &InstantiateCapitalCallMsg {
-                        raise: _env.contract.address.clone(),
                         subscription,
-                        amount,
+                        amount: coin(amount as u128, state.capital_denom.clone()),
                     },
                     vec![],
                     String::from("raise contract instantiated cap call"),
