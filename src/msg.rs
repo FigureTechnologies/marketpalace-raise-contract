@@ -23,6 +23,7 @@ pub enum HandleMsg {
     IssueCalls { calls: HashMap<Addr, u64> },
     AuthorizeCall {},
     CloseCalls { calls: Vec<Addr> },
+    IssueDistributions { distributions: HashMap<Addr, u64> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

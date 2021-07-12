@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, Coin, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, Coin,
+    CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -73,6 +73,9 @@ pub fn execute(
         HandleMsg::IssueCalls { calls } => try_issue_calls(deps, _env, info, calls),
         HandleMsg::AuthorizeCall {} => try_authorize_call(deps, _env, info),
         HandleMsg::CloseCalls { calls } => try_close_calls(deps, _env, info, calls),
+        HandleMsg::IssueDistributions { distributions } => {
+            try_issue_distributions(deps, _env, info, distributions)
+        }
     }
 }
 
@@ -102,6 +105,7 @@ pub enum SubscriptionMsg {
     SubmitPendingReview {},
     Accept { commitment: u64 },
     IssueCapitalCall { capital_call: Addr },
+    IssueDistribution {},
 }
 
 #[derive(Deserialize)]
@@ -320,6 +324,52 @@ pub fn try_close_calls(
     Ok(Response {
         submessages: vec![],
         messages: close_messages,
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+pub fn try_issue_distributions(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    distributions: HashMap<Addr, u64>,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can issue distributions"));
+    }
+
+    let capital = info.funds.first().unwrap();
+    if capital.denom != state.capital_denom {
+        return Err(contract_error("incorrect capital denom"));
+    }
+
+    let total = distributions.iter().fold(0, |sum, next| sum + next.1);
+    if capital.amount.u128() as u64 != total {
+        return Err(contract_error(
+            "incorrect capital sent for all distributions",
+        ));
+    }
+
+    let distributions = distributions
+        .into_iter()
+        .map(|(subscription, distribution)| {
+            CosmosMsg::Wasm(
+                wasm_execute(
+                    subscription,
+                    &SubscriptionMsg::IssueDistribution {},
+                    vec![coin(distribution as u128, state.capital_denom)],
+                )
+                .unwrap(),
+            )
+        })
+        .collect();
+
+    Ok(Response {
+        submessages: vec![],
+        messages: distributions,
         attributes: vec![],
         data: Option::None,
     })
