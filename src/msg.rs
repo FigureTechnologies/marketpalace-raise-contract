@@ -21,7 +21,8 @@ pub enum HandleMsg {
     ProposeSubscription { subscription: Addr },
     AcceptSubscriptions { subscriptions: HashMap<Addr, u64> },
     IssueCalls { calls: HashMap<Addr, u64> },
-    AuthorizeCall { call: Addr },
+    AuthorizeCall {},
+    CloseCalls { calls: Vec<Addr> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

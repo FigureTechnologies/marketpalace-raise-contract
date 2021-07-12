@@ -71,7 +71,8 @@ pub fn execute(
             try_accept_subscriptions(deps, _env, info, subscriptions)
         }
         HandleMsg::IssueCalls { calls } => try_issue_calls(deps, _env, info, calls),
-        HandleMsg::AuthorizeCall { call } => try_authorize_call(deps, _env, info, call),
+        HandleMsg::AuthorizeCall {} => try_authorize_call(deps, _env, info),
+        HandleMsg::CloseCalls { calls } => try_close_calls(deps, _env, info, calls),
     }
 }
 
@@ -112,8 +113,15 @@ pub struct CapitalCallState {
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateCapitalCallMsg {
+    pub raise: Addr,
     pub subscription: Addr,
     pub amount: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapitalCallMsg {
+    Close {},
 }
 
 pub fn try_propose_subscription(
@@ -223,7 +231,7 @@ pub fn try_issue_calls(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can accept subscriptions"));
+        return Err(contract_error("only gp or admin can issue calls"));
     }
 
     let calls = calls
@@ -233,6 +241,7 @@ pub fn try_issue_calls(
                 wasm_instantiate(
                     state.capital_call_code_id,
                     &InstantiateCapitalCallMsg {
+                        raise: _env.contract.address.clone(),
                         subscription,
                         amount,
                     },
@@ -256,7 +265,6 @@ pub fn try_authorize_call(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    call: Addr,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -287,6 +295,31 @@ pub fn try_authorize_call(
     Ok(Response {
         submessages: vec![],
         messages: vec![grant, issue],
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+pub fn try_close_calls(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    calls: Vec<Addr>,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can close calls"));
+    }
+
+    let close_messages = calls
+        .into_iter()
+        .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CapitalCallMsg::Close {}, vec![]).unwrap()))
+        .collect();
+
+    Ok(Response {
+        submessages: vec![],
+        messages: close_messages,
         attributes: vec![],
         data: Option::None,
     })
