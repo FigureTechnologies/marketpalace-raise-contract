@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use cosmwasm_std::{Addr, Coin};
+use cosmwasm_std::{Addr};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -20,8 +20,8 @@ pub enum HandleMsg {
     ProposeSubscription {
         subscription: Addr,
     },
-    Accept {
-        promises_and_commitments: HashMap<Addr, u64>,
+    AcceptSubscriptions {
+        subscriptions: HashMap<Addr, u64>,
     },
 }
 

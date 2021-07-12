@@ -67,9 +67,9 @@ pub fn execute(
         HandleMsg::ProposeSubscription {
             subscription,
         } => try_propose_subscription(deps, _env, info, subscription),
-        HandleMsg::Accept {
-            promises_and_commitments,
-        } => try_accept(deps, _env, info, promises_and_commitments),
+        HandleMsg::AcceptSubscriptions {
+            subscriptions,
+        } => try_accept_subscriptions(deps, _env, info, subscriptions),
     }
 }
 
@@ -132,13 +132,13 @@ pub fn try_propose_subscription(
 
     if contract.owner != info.sender {
         return Err(contract_error(
-            "only owner of capital promise can make proposal",
+            "only owner of subscription can make proposal",
         ));
     }
 
     if contract.raise_contract_address != _env.contract.address {
         return Err(contract_error(
-            "incorrect raise contract address specified on capital promise",
+            "incorrect raise contract address specified on subscription",
         ));
     }
 
@@ -179,21 +179,25 @@ pub fn try_propose_subscription(
     })
 }
 
-pub fn try_accept(
+pub fn try_accept_subscriptions(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    promises_and_commitments: HashMap<Addr, u64>,
+    subscriptions: HashMap<Addr, u64>,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can accept subscriptions"));
+    }
+
     Ok(Response {
         submessages: vec![],
-        messages: promises_and_commitments
+        messages: subscriptions
             .into_iter()
-            .map(|(promise, commitment)| {
+            .map(|(subscription, commitment)| {
                 CosmosMsg::Wasm(
-                    wasm_execute(promise, &SubscriptionMsg::Accept { commitment }, vec![])
+                    wasm_execute(subscription, &SubscriptionMsg::Accept { commitment }, vec![])
                         .unwrap(),
                 )
             })
