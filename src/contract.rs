@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    entry_point, from_slice, to_binary, wasm_execute, Addr, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult,
+    entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, CosmosMsg,
+    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -27,6 +27,7 @@ pub fn instantiate(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = State {
         status: Status::Active,
+        capital_call_code_id: msg.capital_call_code_id,
         gp: info.sender,
         admin: msg.admin,
         denom: msg.denom.clone(),
@@ -61,17 +62,16 @@ pub fn execute(
     _env: Env,
     info: MessageInfo,
     msg: HandleMsg,
-) -> Result<Response<CosmosMsg>, ContractError> {
+) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
-        HandleMsg::ProposeSubscription {
-            subscription,
-        } => try_propose_subscription(deps, _env, info, subscription),
-        HandleMsg::AcceptSubscriptions {
-            subscriptions,
-        } => try_accept_subscriptions(deps, _env, info, subscriptions),
-        HandleMsg::IssueCalls {
-            calls,
-        } => try_issue_calls(deps, _env, info, calls),
+        HandleMsg::ProposeSubscription { subscription } => {
+            try_propose_subscription(deps, _env, info, subscription)
+        }
+        HandleMsg::AcceptSubscriptions { subscriptions } => {
+            try_accept_subscriptions(deps, _env, info, subscriptions)
+        }
+        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, _env, info, calls),
+        HandleMsg::AuthorizeCall { call } => try_authorize_call(deps, _env, info, call),
     }
 }
 
@@ -99,18 +99,21 @@ pub enum SubscriptionStatus {
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionMsg {
     SubmitPendingReview {},
-    Accept {
-        commitment: u64,
-    },
-    IssueCapitalCall {
-        capital_call: CapitalPromiseCapitalCall,
-    },
+    Accept { commitment: u64 },
+    IssueCapitalCall { capital_call: Addr },
+}
+
+#[derive(Deserialize)]
+pub struct CapitalCallState {
+    pub subscription: Addr,
+    pub amount: u64,
 }
 
 #[derive(Serialize)]
-pub struct CapitalPromiseCapitalCall {
+#[serde(rename_all = "snake_case")]
+pub struct InstantiateCapitalCallMsg {
+    pub subscription: Addr,
     pub amount: u64,
-    pub days_of_notice: Option<u16>,
 }
 
 pub fn try_propose_subscription(
@@ -118,7 +121,7 @@ pub fn try_propose_subscription(
     _env: Env,
     info: MessageInfo,
     subscription: Addr,
-) -> Result<Response<CosmosMsg>, ContractError> {
+) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if state.status != Status::Active {
@@ -161,9 +164,7 @@ pub fn try_propose_subscription(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state
-            .pending_review_subs
-            .push(subscription.clone());
+        state.pending_review_subs.push(subscription.clone());
         Ok(state)
     })?;
 
@@ -186,7 +187,7 @@ pub fn try_accept_subscriptions(
     _env: Env,
     info: MessageInfo,
     subscriptions: HashMap<Addr, u64>,
-) -> Result<Response<CosmosMsg>, ContractError> {
+) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp && info.sender != state.admin {
@@ -199,8 +200,12 @@ pub fn try_accept_subscriptions(
             .into_iter()
             .map(|(subscription, commitment)| {
                 CosmosMsg::Wasm(
-                    wasm_execute(subscription, &SubscriptionMsg::Accept { commitment }, vec![])
-                        .unwrap(),
+                    wasm_execute(
+                        subscription,
+                        &SubscriptionMsg::Accept { commitment },
+                        vec![],
+                    )
+                    .unwrap(),
                 )
             })
             .collect(),
@@ -214,33 +219,74 @@ pub fn try_issue_calls(
     _env: Env,
     info: MessageInfo,
     calls: HashMap<Addr, u64>,
-) -> Result<Response<CosmosMsg>, ContractError> {
+) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp && info.sender != state.admin {
         return Err(contract_error("only gp or admin can accept subscriptions"));
     }
 
+    let calls = calls
+        .into_iter()
+        .map(|(subscription, amount)| {
+            CosmosMsg::Wasm(
+                wasm_instantiate(
+                    state.capital_call_code_id,
+                    &InstantiateCapitalCallMsg {
+                        subscription,
+                        amount,
+                    },
+                    vec![],
+                    String::from("raise contract instantiated cap call"),
+                )
+                .unwrap(),
+            )
+        })
+        .collect();
+
     Ok(Response {
         submessages: vec![],
-        messages: calls
-            .into_iter()
-            .map(|(subscription, amount)| {
-                CosmosMsg::Wasm(
-                    wasm_execute(
-                        subscription,
-                        &SubscriptionMsg::IssueCapitalCall {
-                            capital_call: CapitalPromiseCapitalCall {
-                                amount,
-                                days_of_notice: None,
-                            },
-                        },
-                        vec![],
-                    )
-                    .unwrap(),
-                )
-            })
-            .collect(),
+        messages: calls,
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+pub fn try_authorize_call(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    call: Addr,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    let contract: CapitalCallState = from_slice(
+        &deps
+            .querier
+            .query_wasm_raw(info.sender.clone(), CONFIG_KEY)?
+            .unwrap(),
+    )?;
+
+    let grant = grant_marker_access(
+        state.denom.clone(),
+        _env.contract.address,
+        vec![MarkerAccess::Withdraw],
+    )?;
+
+    let issue = CosmosMsg::Wasm(
+        wasm_execute(
+            contract.subscription,
+            &SubscriptionMsg::IssueCapitalCall {
+                capital_call: info.sender,
+            },
+            vec![],
+        )
+        .unwrap(),
+    );
+
+    Ok(Response {
+        submessages: vec![],
+        messages: vec![grant, issue],
         attributes: vec![],
         data: Option::None,
     })
@@ -268,6 +314,7 @@ mod tests {
 
     fn inst_msg() -> InstantiateMsg {
         InstantiateMsg {
+            capital_call_code_id: 117,
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
             denom: String::from("funny_money"),
             capital_denom: String::from("stable_coin"),

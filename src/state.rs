@@ -9,6 +9,7 @@ pub static CONFIG_KEY: &[u8] = b"config";
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub status: Status,
+    pub capital_call_code_id: u64,
     pub gp: Addr,
     pub admin: Addr,
     pub denom: String,
