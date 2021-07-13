@@ -8,6 +8,7 @@ use cosmwasm_std::Addr;
 pub struct InstantiateMsg {
     pub capital_call_code_id: u64,
     pub admin: Addr,
+    pub qualified_tags: Vec<String>,
     pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,

@@ -12,6 +12,7 @@ pub struct State {
     pub capital_call_code_id: u64,
     pub gp: Addr,
     pub admin: Addr,
+    pub qualified_tags: Vec<String>,
     pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,

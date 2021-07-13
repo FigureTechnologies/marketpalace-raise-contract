@@ -4,6 +4,7 @@ use cosmwasm_std::{
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
+    ProvenanceQuerier,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,6 +31,7 @@ pub fn instantiate(
         capital_call_code_id: msg.capital_call_code_id,
         gp: info.sender,
         admin: msg.admin,
+        qualified_tags: msg.qualified_tags,
         asset_denom: msg.asset_denom.clone(),
         capital_denom: msg.capital_denom,
         target: msg.target.clone(),
@@ -173,6 +175,21 @@ pub fn try_propose_subscription(
 
     if contract.status != SubscriptionStatus::Draft {
         return Err(contract_error("capital promise not in draft status"));
+    }
+
+    if !state.qualified_tags.is_empty() {
+        let attributes = ProvenanceQuerier::new(&deps.querier)
+            .get_attributes(contract.owner, None as Option<String>)?
+            .attributes;
+
+        if !attributes
+            .iter()
+            .any(|attribute| state.qualified_tags.contains(&attribute.name))
+        {
+            return Err(contract_error(
+                "subscription owner must have one of qualified tages",
+            ));
+        }
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -360,7 +377,7 @@ pub fn try_issue_distributions(
                 wasm_execute(
                     subscription,
                     &SubscriptionMsg::IssueDistribution {},
-                    vec![coin(distribution as u128, state.capital_denom)],
+                    vec![coin(distribution as u128, state.capital_denom.clone())],
                 )
                 .unwrap(),
             )
@@ -399,6 +416,7 @@ mod tests {
         InstantiateMsg {
             capital_call_code_id: 117,
             admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
+            qualified_tags: vec![],
             asset_denom: String::from("funny_money"),
             capital_denom: String::from("stable_coin"),
             target: 5_000_000,
