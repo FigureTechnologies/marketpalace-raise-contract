@@ -21,8 +21,7 @@ pub struct InstantiateMsg {
 pub enum HandleMsg {
     ProposeSubscription { subscription: Addr },
     AcceptSubscriptions { subscriptions: HashMap<Addr, u64> },
-    IssueCalls { calls: HashMap<Addr, u64> },
-    AuthorizeCall {},
+    IssueCalls { calls: Vec<Addr> },
     CloseCalls { calls: Vec<Addr> },
     IssueDistributions { distributions: HashMap<Addr, u64> },
 }

@@ -19,6 +19,7 @@ pub struct State {
     pub min_commitment: u64,
     pub max_commitment: u64,
     pub pending_review_subs: Vec<Addr>,
+    pub capital_calls: Vec<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
