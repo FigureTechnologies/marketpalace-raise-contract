@@ -1,7 +1,6 @@
-use std::collections::HashSet;
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, BankMsg, Binary, Coin,
-    CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, BankMsg,
+    Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -9,10 +8,12 @@ use provwasm_std::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg};
 use crate::state::{config, config_read, State, Status, CONFIG_KEY};
+use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
 
 fn contract_error(err: &str) -> ContractError {
     ContractError::Std(StdError::generic_err(err))
@@ -80,35 +81,10 @@ pub fn execute(
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
-        HandleMsg::RedeemCapital{ to, amount, memo } => try_redeem_capital(deps, info, to, amount, memo),
+        HandleMsg::RedeemCapital { to, amount, memo } => {
+            try_redeem_capital(deps, info, to, amount, memo)
+        }
     }
-}
-
-#[derive(Deserialize)]
-pub struct SubscriptionState {
-    pub owner: Addr,
-    pub status: SubscriptionStatus,
-    pub raise_contract_address: Addr,
-    pub admin: Addr,
-    pub commitment_denom: String,
-    pub min_commitment: u64,
-    pub max_commitment: u64,
-    pub commitment: Option<u64>,
-    pub paid: Option<u64>,
-}
-
-#[derive(Deserialize, PartialEq)]
-pub enum SubscriptionStatus {
-    Draft,
-    Accepted,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SubscriptionMsg {
-    Accept { commitment: u64 },
-    IssueCapitalCall { capital_call: Addr },
-    IssueDistribution {},
 }
 
 #[derive(Deserialize)]
@@ -143,44 +119,37 @@ pub fn try_propose_subscription(
         return Err(contract_error("contract is not active"));
     }
 
-    let contract: SubscriptionState = from_slice(
-        &deps
-            .querier
-            .query_wasm_raw(subscription.clone(), CONFIG_KEY)?
-            .unwrap(),
-    )?;
+    let terms: SubTerms = deps
+        .querier
+        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {})?;
 
-    if contract.owner != info.sender {
+    if terms.owner != info.sender {
         return Err(contract_error(
             "only owner of subscription can make proposal",
         ));
     }
 
-    if contract.raise_contract_address != env.contract.address {
+    if terms.raise != env.contract.address {
         return Err(contract_error(
             "incorrect raise contract address specified on subscription",
         ));
     }
 
-    if contract.max_commitment < state.min_commitment {
+    if terms.max_commitment < state.min_commitment {
         return Err(contract_error(
             "capital promise max commitment is below raise minumum commitment",
         ));
     }
 
-    if contract.min_commitment > state.max_commitment {
+    if terms.min_commitment > state.max_commitment {
         return Err(contract_error(
             "capital promise min commitment exceeds raise maximum commitment",
         ));
     }
 
-    if contract.status != SubscriptionStatus::Draft {
-        return Err(contract_error("capital promise not in draft status"));
-    }
-
     if !state.qualified_tags.is_empty() {
         let attributes = ProvenanceQuerier::new(&deps.querier)
-            .get_attributes(contract.owner, None as Option<String>)?
+            .get_attributes(terms.owner, None as Option<String>)?
             .attributes;
 
         if !attributes
@@ -232,12 +201,8 @@ pub fn try_accept_subscriptions(
             .into_iter()
             .map(|(subscription, commitment)| {
                 CosmosMsg::Wasm(
-                    wasm_execute(
-                        subscription,
-                        &SubscriptionMsg::Accept { commitment },
-                        vec![],
-                    )
-                    .unwrap(),
+                    wasm_execute(subscription, &SubExecuteMsg::Accept { commitment }, vec![])
+                        .unwrap(),
                 )
             })
             .collect(),
@@ -258,7 +223,11 @@ pub fn try_issue_calls(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.capital_calls = state.capital_calls.union(&calls).map(|it| it.clone()).collect();
+        state.capital_calls = state
+            .capital_calls
+            .union(&calls)
+            .map(|it| it.clone())
+            .collect();
         Ok(state)
     })?;
 
@@ -284,7 +253,7 @@ pub fn try_issue_calls(
             let issue = CosmosMsg::Wasm(
                 wasm_execute(
                     contract.subscription,
-                    &SubscriptionMsg::IssueCapitalCall { capital_call: call },
+                    &SubExecuteMsg::IssueCapitalCall { capital_call: call },
                     vec![],
                 )
                 .unwrap(),
@@ -355,7 +324,7 @@ pub fn try_issue_distributions(
             CosmosMsg::Wasm(
                 wasm_execute(
                     subscription,
-                    &SubscriptionMsg::IssueDistribution {},
+                    &SubExecuteMsg::IssueDistribution {},
                     vec![coin(distribution as u128, state.capital_denom.clone())],
                 )
                 .unwrap(),
@@ -370,7 +339,6 @@ pub fn try_issue_distributions(
         data: Option::None,
     })
 }
-
 
 pub fn try_redeem_capital(
     deps: DepsMut,
@@ -445,5 +413,29 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
         let status: Status = from_binary(&res).unwrap();
         assert_eq!(Status::Active, status);
+    }
+
+    #[test]
+    fn try_propose_subscription() {
+        let mut deps = mock_dependencies(&[]);
+
+        // we can just call .unwrap() to assert this was a success
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("creator", &[]),
+            inst_msg(),
+        )
+        .unwrap();
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("lp", &[]),
+            HandleMsg::ProposeSubscription {
+                subscription: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
+            },
+        )
+        .unwrap();
     }
 }

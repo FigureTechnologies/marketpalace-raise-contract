@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 use cosmwasm_std::Addr;
 
@@ -19,12 +19,26 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    ProposeSubscription { subscription: Addr },
-    AcceptSubscriptions { subscriptions: HashMap<Addr, u64> },
-    IssueCalls { calls: HashSet<Addr> },
-    CloseCalls { calls: Vec<Addr> },
-    IssueDistributions { distributions: HashMap<Addr, u64> },
-    RedeemCapital { to: Addr, amount: u64, memo: Option<String> },
+    ProposeSubscription {
+        subscription: Addr,
+    },
+    AcceptSubscriptions {
+        subscriptions: HashMap<Addr, u64>,
+    },
+    IssueCalls {
+        calls: HashSet<Addr>,
+    },
+    CloseCalls {
+        calls: Vec<Addr>,
+    },
+    IssueDistributions {
+        distributions: HashMap<Addr, u64>,
+    },
+    RedeemCapital {
+        to: Addr,
+        amount: u64,
+        memo: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
