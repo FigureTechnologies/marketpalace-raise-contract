@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, BankMsg,
+    coin, entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg,
     Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
@@ -121,7 +121,7 @@ pub fn try_propose_subscription(
 
     let terms: SubTerms = deps
         .querier
-        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {})?;
+        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {}).expect("terms");
 
     if terms.owner != info.sender {
         return Err(contract_error(
@@ -382,9 +382,11 @@ fn query_status(deps: Deps) -> StdResult<Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{coin, coins, from_binary, Addr, Coin, CosmosMsg};
-    use provwasm_mocks::{mock_dependencies, must_read_binary_file};
+
+    use cosmwasm_std::testing::{mock_env, mock_info, mock_dependencies, MockStorage, MockApi, MOCK_CONTRACT_ADDR};
+    use cosmwasm_std::{coin, coins, from_binary, Addr, Coin, ContractResult, CosmosMsg, CustomQuery, Empty, OwnedDeps, Querier, QueryRequest, WasmQuery, SystemResult, SystemError};
+    use crate::mock::MockContractQuerier;
+    use provwasm_mocks::{must_read_binary_file};
     use provwasm_std::{Marker, MarkerMsgParams, ProvenanceMsgParams};
 
     fn inst_msg() -> InstantiateMsg {
@@ -417,7 +419,21 @@ mod tests {
 
     #[test]
     fn try_propose_subscription() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = OwnedDeps {
+            storage: MockStorage::default(),
+            api: MockApi::default(),
+            querier: MockContractQuerier {
+                wasm_smart_handler: |_contract_addr, _msg| {
+                    SystemResult::Ok(ContractResult::Ok(to_binary(&SubTerms {
+                        owner: Addr::unchecked("lp"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        commitment_denom: String::from("cfigure"),
+                        min_commitment: 10_000,
+                        max_commitment: 50_000,
+                    }).unwrap()))
+                },
+            },
+        };
 
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(
@@ -433,7 +449,7 @@ mod tests {
             mock_env(),
             mock_info("lp", &[]),
             HandleMsg::ProposeSubscription {
-                subscription: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
+                subscription: Addr::unchecked("sub"),
             },
         )
         .unwrap();

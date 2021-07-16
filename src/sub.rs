@@ -10,7 +10,7 @@ pub enum SubExecuteMsg {
     IssueDistribution {},
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct SubTerms {
     pub owner: Addr,
     pub raise: Addr,
