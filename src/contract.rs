@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use cosmwasm_std::{
     coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, BankMsg, Binary, Coin,
     CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
@@ -37,8 +38,9 @@ pub fn instantiate(
         target: msg.target.clone(),
         min_commitment: msg.min_commitment.clone(),
         max_commitment: msg.max_commitment.clone(),
-        pending_review_subs: vec![],
-        capital_calls: vec![],
+        pending_review_subs: HashSet::new(),
+        approved_subs: HashSet::new(),
+        capital_calls: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
 
@@ -71,12 +73,12 @@ pub fn execute(
             try_propose_subscription(deps, env, info, subscription)
         }
         HandleMsg::AcceptSubscriptions { subscriptions } => {
-            try_accept_subscriptions(deps, env, info, subscriptions)
+            try_accept_subscriptions(deps, info, subscriptions)
         }
-        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, env, info, calls),
-        HandleMsg::CloseCalls { calls } => try_close_calls(deps, env, info, calls),
+        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, info, calls),
+        HandleMsg::CloseCalls { calls } => try_close_calls(deps, info, calls),
         HandleMsg::IssueDistributions { distributions } => {
-            try_issue_distributions(deps, env, info, distributions)
+            try_issue_distributions(deps, info, distributions)
         }
         HandleMsg::RedeemCapital{ to, amount, memo } => try_redeem_capital(deps, info, to, amount, memo),
     }
@@ -133,7 +135,7 @@ pub enum CapitalCallMsg {
 
 pub fn try_propose_subscription(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     subscription: Addr,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -156,7 +158,7 @@ pub fn try_propose_subscription(
         ));
     }
 
-    if contract.raise_contract_address != _env.contract.address {
+    if contract.raise_contract_address != env.contract.address {
         return Err(contract_error(
             "incorrect raise contract address specified on subscription",
         ));
@@ -194,7 +196,7 @@ pub fn try_propose_subscription(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.pending_review_subs.push(subscription.clone());
+        state.pending_review_subs.insert(subscription.clone());
         Ok(state)
     })?;
 
@@ -214,7 +216,6 @@ pub fn try_propose_subscription(
 
 pub fn try_accept_subscriptions(
     deps: DepsMut,
-    _env: Env,
     info: MessageInfo,
     subscriptions: HashMap<Addr, u64>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -246,9 +247,8 @@ pub fn try_accept_subscriptions(
 
 pub fn try_issue_calls(
     deps: DepsMut,
-    _env: Env,
     info: MessageInfo,
-    calls: Vec<Addr>,
+    calls: HashSet<Addr>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -257,7 +257,7 @@ pub fn try_issue_calls(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.capital_calls.append(&mut calls.clone());
+        state.capital_calls = state.capital_calls.union(&calls).map(|it| it.clone()).collect();
         Ok(state)
     })?;
 
@@ -303,7 +303,6 @@ pub fn try_issue_calls(
 
 pub fn try_close_calls(
     deps: DepsMut,
-    _env: Env,
     info: MessageInfo,
     calls: Vec<Addr>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -328,7 +327,6 @@ pub fn try_close_calls(
 
 pub fn try_issue_distributions(
     deps: DepsMut,
-    _env: Env,
     info: MessageInfo,
     distributions: HashMap<Addr, u64>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {

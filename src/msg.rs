@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 
 use cosmwasm_std::Addr;
 
@@ -21,7 +21,7 @@ pub struct InstantiateMsg {
 pub enum HandleMsg {
     ProposeSubscription { subscription: Addr },
     AcceptSubscriptions { subscriptions: HashMap<Addr, u64> },
-    IssueCalls { calls: Vec<Addr> },
+    IssueCalls { calls: HashSet<Addr> },
     CloseCalls { calls: Vec<Addr> },
     IssueDistributions { distributions: HashMap<Addr, u64> },
     RedeemCapital { to: Addr, amount: u64, memo: Option<String> },

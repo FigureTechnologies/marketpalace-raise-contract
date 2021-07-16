@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -18,8 +19,9 @@ pub struct State {
     pub target: u64,
     pub min_commitment: u64,
     pub max_commitment: u64,
-    pub pending_review_subs: Vec<Addr>,
-    pub capital_calls: Vec<Addr>,
+    pub pending_review_subs: HashSet<Addr>,
+    pub approved_subs: HashSet<Addr>,
+    pub capital_calls: HashSet<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
