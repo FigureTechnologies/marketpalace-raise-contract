@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, Binary, Coin,
+    coin, entry_point, from_slice, to_binary, wasm_execute, wasm_instantiate, Addr, BankMsg, Binary, Coin,
     CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
@@ -62,22 +62,23 @@ pub fn instantiate(
 #[entry_point]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: HandleMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
         HandleMsg::ProposeSubscription { subscription } => {
-            try_propose_subscription(deps, _env, info, subscription)
+            try_propose_subscription(deps, env, info, subscription)
         }
         HandleMsg::AcceptSubscriptions { subscriptions } => {
-            try_accept_subscriptions(deps, _env, info, subscriptions)
+            try_accept_subscriptions(deps, env, info, subscriptions)
         }
-        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, _env, info, calls),
-        HandleMsg::CloseCalls { calls } => try_close_calls(deps, _env, info, calls),
+        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, env, info, calls),
+        HandleMsg::CloseCalls { calls } => try_close_calls(deps, env, info, calls),
         HandleMsg::IssueDistributions { distributions } => {
-            try_issue_distributions(deps, _env, info, distributions)
+            try_issue_distributions(deps, env, info, distributions)
         }
+        HandleMsg::RedeemCapital{ to, amount, memo } => try_redeem_capital(deps, info, to, amount, memo),
     }
 }
 
@@ -266,22 +267,23 @@ pub fn try_issue_calls(
             let contract: CapitalCallState = from_slice(
                 &deps
                     .querier
-                    .query_wasm_raw(call.clone(), CONFIG_KEY).unwrap()
+                    .query_wasm_raw(call.clone(), CONFIG_KEY)
+                    .unwrap()
                     .unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
 
             let grant = grant_marker_access(
                 state.asset_denom.clone(),
                 call.clone(),
                 vec![MarkerAccess::Withdraw],
-            ).unwrap();
-        
+            )
+            .unwrap();
+
             let issue = CosmosMsg::Wasm(
                 wasm_execute(
                     contract.subscription,
-                    &SubscriptionMsg::IssueCapitalCall {
-                        capital_call: call,
-                    },
+                    &SubscriptionMsg::IssueCapitalCall { capital_call: call },
                     vec![],
                 )
                 .unwrap(),
@@ -365,6 +367,34 @@ pub fn try_issue_distributions(
     Ok(Response {
         submessages: vec![],
         messages: distributions,
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
+
+pub fn try_redeem_capital(
+    deps: DepsMut,
+    info: MessageInfo,
+    to: Addr,
+    amount: u64,
+    memo: Option<String>,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp can redeem capital"));
+    }
+
+    let send = BankMsg::Send {
+        to_address: to.to_string(),
+        amount: vec![coin(amount as u128, state.capital_denom)],
+    }
+    .into();
+
+    Ok(Response {
+        submessages: vec![],
+        messages: vec![send],
         attributes: vec![],
         data: Option::None,
     })

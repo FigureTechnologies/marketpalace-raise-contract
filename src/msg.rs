@@ -24,6 +24,7 @@ pub enum HandleMsg {
     IssueCalls { calls: Vec<Addr> },
     CloseCalls { calls: Vec<Addr> },
     IssueDistributions { distributions: HashMap<Addr, u64> },
+    RedeemCapital { to: Addr, amount: u64, memo: Option<String> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
