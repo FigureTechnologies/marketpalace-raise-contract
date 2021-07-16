@@ -14,7 +14,7 @@ pub enum SubExecuteMsg {
 pub struct SubTerms {
     pub owner: Addr,
     pub raise: Addr,
-    pub commitment_denom: String,
+    pub capital_denom: String,
     pub min_commitment: u64,
     pub max_commitment: u64,
 }

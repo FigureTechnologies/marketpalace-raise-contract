@@ -135,6 +135,10 @@ pub fn try_propose_subscription(
         ));
     }
 
+    if terms.capital_denom != state.capital_denom {
+        return Err(contract_error("both sub and raise need to have the same capital denom"));
+    }
+
     if terms.max_commitment < state.min_commitment {
         return Err(contract_error(
             "capital promise max commitment is below raise minumum commitment",
@@ -427,7 +431,7 @@ mod tests {
                     SystemResult::Ok(ContractResult::Ok(to_binary(&SubTerms {
                         owner: Addr::unchecked("lp"),
                         raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        commitment_denom: String::from("cfigure"),
+                        capital_denom: String::from("stable_coin"),
                         min_commitment: 10_000,
                         max_commitment: 50_000,
                     }).unwrap()))
