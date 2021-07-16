@@ -44,6 +44,12 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    // GetStatus returns the current status as a json-encoded number
     GetStatus {},
+    GetSubs {},
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Subs {
+    pub pending_review: HashSet<Addr>,
+    pub accepted: HashSet<Addr>,
 }

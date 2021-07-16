@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
-use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg, Subs};
 use crate::state::{config, config_read, State, Status, CONFIG_KEY};
 use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
 
@@ -373,14 +373,15 @@ pub fn try_redeem_capital(
 
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    match msg {
-        QueryMsg::GetStatus {} => to_binary(&query_status(deps)?),
-    }
-}
-
-fn query_status(deps: Deps) -> StdResult<Status> {
     let state = config_read(deps.storage).load()?;
-    Ok(state.status)
+
+    match msg {
+        QueryMsg::GetStatus {} => to_binary(&state.status),
+        QueryMsg::GetSubs {} => to_binary(&Subs{
+            pending_review: state.pending_review_subs,
+            accepted: state.accepted_subs,
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -440,7 +441,7 @@ mod tests {
         };
 
         // we can just call .unwrap() to assert this was a success
-        let res = instantiate(
+        instantiate(
             deps.as_mut(),
             mock_env(),
             mock_info("creator", &[]),
@@ -448,7 +449,7 @@ mod tests {
         )
         .unwrap();
 
-        let res = execute(
+        execute(
             deps.as_mut(),
             mock_env(),
             mock_info("lp", &[]),
@@ -457,5 +458,9 @@ mod tests {
             },
         )
         .unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
+        let subs: Subs = from_binary(&res).unwrap();
+        assert_eq!(1, subs.pending_review.len());
     }
 }
