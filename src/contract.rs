@@ -453,9 +453,10 @@ mod tests {
             },
         };
 
-        // we can just call .unwrap() to assert this was a success
+        // init contract as gp
         instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
 
+        // propose a sub as lp
         execute(
             deps.as_mut(),
             mock_env(),
@@ -466,11 +467,12 @@ mod tests {
         )
         .unwrap();
 
+        // assert that the sub is store in pending review
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(1, subs.pending_review.len());
-        assert_eq!(0, subs.accepted.len());
 
+        // accept pending sub as gp
         let res = execute(
             deps.as_mut(),
             mock_env(),
@@ -484,6 +486,7 @@ mod tests {
         .unwrap();
         assert_eq!(1, res.messages.len());
 
+        // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(0, subs.pending_review.len());
