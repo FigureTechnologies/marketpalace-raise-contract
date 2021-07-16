@@ -39,7 +39,7 @@ pub fn instantiate(
         min_commitment: msg.min_commitment.clone(),
         max_commitment: msg.max_commitment.clone(),
         pending_review_subs: HashSet::new(),
-        approved_subs: HashSet::new(),
+        accepted_subs: HashSet::new(),
         capital_calls: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
@@ -100,14 +100,12 @@ pub struct SubscriptionState {
 #[derive(Deserialize, PartialEq)]
 pub enum SubscriptionStatus {
     Draft,
-    PendingReview,
     Accepted,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionMsg {
-    SubmitPendingReview {},
     Accept { commitment: u64 },
     IssueCapitalCall { capital_call: Addr },
     IssueDistribution {},
@@ -200,15 +198,9 @@ pub fn try_propose_subscription(
         Ok(state)
     })?;
 
-    let accept = wasm_execute(
-        subscription,
-        &SubscriptionMsg::SubmitPendingReview {},
-        vec![],
-    )?;
-
     Ok(Response {
         submessages: vec![],
-        messages: vec![CosmosMsg::Wasm(accept)],
+        messages: vec![],
         attributes: vec![],
         data: Option::None,
     })
@@ -224,6 +216,15 @@ pub fn try_accept_subscriptions(
     if info.sender != state.gp && info.sender != state.admin {
         return Err(contract_error("only gp or admin can accept subscriptions"));
     }
+
+    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+        subscriptions.iter().for_each(|(sub, _)| {
+            state.pending_review_subs.remove(sub);
+            state.accepted_subs.insert(sub.clone());
+        });
+
+        Ok(state)
+    })?;
 
     Ok(Response {
         submessages: vec![],

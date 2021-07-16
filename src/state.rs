@@ -20,7 +20,7 @@ pub struct State {
     pub min_commitment: u64,
     pub max_commitment: u64,
     pub pending_review_subs: HashSet<Addr>,
-    pub approved_subs: HashSet<Addr>,
+    pub accepted_subs: HashSet<Addr>,
     pub capital_calls: HashSet<Addr>,
 }
 
