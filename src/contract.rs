@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg,
-    Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -121,7 +121,8 @@ pub fn try_propose_subscription(
 
     let terms: SubTerms = deps
         .querier
-        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {}).expect("terms");
+        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {})
+        .expect("terms");
 
     if terms.owner != info.sender {
         return Err(contract_error(
@@ -136,7 +137,9 @@ pub fn try_propose_subscription(
     }
 
     if terms.capital_denom != state.capital_denom {
-        return Err(contract_error("both sub and raise need to have the same capital denom"));
+        return Err(contract_error(
+            "both sub and raise need to have the same capital denom",
+        ));
     }
 
     if terms.max_commitment < state.min_commitment {
@@ -377,7 +380,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
     match msg {
         QueryMsg::GetStatus {} => to_binary(&state.status),
-        QueryMsg::GetSubs {} => to_binary(&Subs{
+        QueryMsg::GetSubs {} => to_binary(&Subs {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
         }),
@@ -388,10 +391,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use cosmwasm_std::testing::{mock_env, mock_info, mock_dependencies, MockStorage, MockApi, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{coin, coins, from_binary, Addr, Coin, ContractResult, CosmosMsg, CustomQuery, Empty, OwnedDeps, Querier, QueryRequest, WasmQuery, SystemResult, SystemError};
     use crate::mock::MockContractQuerier;
-    use provwasm_mocks::{must_read_binary_file};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,
+    };
+    use cosmwasm_std::{
+        coin, coins, from_binary, Addr, Coin, ContractResult, CosmosMsg, CustomQuery, Empty,
+        OwnedDeps, Querier, QueryRequest, SystemError, SystemResult, WasmQuery,
+    };
+    use provwasm_mocks::must_read_binary_file;
     use provwasm_std::{Marker, MarkerMsgParams, ProvenanceMsgParams};
 
     fn inst_msg() -> InstantiateMsg {
@@ -429,13 +437,16 @@ mod tests {
             api: MockApi::default(),
             querier: MockContractQuerier {
                 wasm_smart_handler: |_contract_addr, _msg| {
-                    SystemResult::Ok(ContractResult::Ok(to_binary(&SubTerms {
-                        owner: Addr::unchecked("lp"),
-                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        capital_denom: String::from("stable_coin"),
-                        min_commitment: 10_000,
-                        max_commitment: 50_000,
-                    }).unwrap()))
+                    SystemResult::Ok(ContractResult::Ok(
+                        to_binary(&SubTerms {
+                            owner: Addr::unchecked("lp"),
+                            raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                            capital_denom: String::from("stable_coin"),
+                            min_commitment: 10_000,
+                            max_commitment: 50_000,
+                        })
+                        .unwrap(),
+                    ))
                 },
             },
         };
