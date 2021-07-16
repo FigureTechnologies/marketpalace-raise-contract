@@ -431,12 +431,14 @@ mod tests {
     }
 
     #[test]
-    fn try_propose_subscription() {
+    fn try_propose_and_accept_subscription() {
         let mut deps = OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
             querier: MockContractQuerier {
-                wasm_smart_handler: |_contract_addr, _msg| {
+                wasm_smart_handler: |contract_addr, _msg| {
+                    assert_eq!("sub_1", contract_addr);
+
                     SystemResult::Ok(ContractResult::Ok(
                         to_binary(&SubTerms {
                             owner: Addr::unchecked("lp"),
@@ -452,20 +454,14 @@ mod tests {
         };
 
         // we can just call .unwrap() to assert this was a success
-        instantiate(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("creator", &[]),
-            inst_msg(),
-        )
-        .unwrap();
+        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
 
         execute(
             deps.as_mut(),
             mock_env(),
             mock_info("lp", &[]),
             HandleMsg::ProposeSubscription {
-                subscription: Addr::unchecked("sub"),
+                subscription: Addr::unchecked("sub_1"),
             },
         )
         .unwrap();
@@ -473,5 +469,24 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(1, subs.pending_review.len());
+        assert_eq!(0, subs.accepted.len());
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::AcceptSubscriptions {
+                subscriptions: vec![(Addr::unchecked("sub_1"), 20_000 as u64)]
+                    .into_iter()
+                    .collect(),
+            },
+        )
+        .unwrap();
+        assert_eq!(1, res.messages.len());
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
+        let subs: Subs = from_binary(&res).unwrap();
+        assert_eq!(0, subs.pending_review.len());
+        assert_eq!(1, subs.accepted.len());
     }
 }
