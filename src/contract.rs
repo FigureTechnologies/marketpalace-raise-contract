@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, from_slice, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps,
+    DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -12,8 +12,8 @@ use std::collections::HashSet;
 
 use crate::call::{CallQueryMsg, CallTerms};
 use crate::error::ContractError;
-use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg, Subs};
-use crate::state::{config, config_read, State, Status, CONFIG_KEY};
+use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Subs};
+use crate::state::{config, config_read, State, Status};
 use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
 
 fn contract_error(err: &str) -> ContractError {
@@ -42,7 +42,7 @@ pub fn instantiate(
         max_commitment: msg.max_commitment.clone(),
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
-        capital_calls: HashSet::new(),
+        issued_calls: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
 
@@ -231,8 +231,8 @@ pub fn try_issue_calls(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.capital_calls = state
-            .capital_calls
+        state.issued_calls = state
+            .issued_calls
             .union(&calls)
             .map(|it| it.clone())
             .collect();
@@ -381,6 +381,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
         }),
+        QueryMsg::GetCalls {} => to_binary(&Calls {
+            issued: state.issued_calls,
+        }),
     }
 }
 
@@ -512,5 +515,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(2, res.messages.len());
+
+        // assert that the issued call is stored
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
+        let calls: Calls = from_binary(&res).unwrap();
+        assert_eq!(1, calls.issued.len());
     }
 }

@@ -21,7 +21,7 @@ pub struct State {
     pub max_commitment: u64,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
-    pub capital_calls: HashSet<Addr>,
+    pub issued_calls: HashSet<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

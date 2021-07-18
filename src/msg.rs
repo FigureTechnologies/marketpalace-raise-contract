@@ -46,10 +46,16 @@ pub enum HandleMsg {
 pub enum QueryMsg {
     GetStatus {},
     GetSubs {},
+    GetCalls {},
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Subs {
     pub pending_review: HashSet<Addr>,
     pub accepted: HashSet<Addr>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Calls {
+    pub issued: HashSet<Addr>,
 }
