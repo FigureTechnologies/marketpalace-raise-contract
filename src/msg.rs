@@ -58,4 +58,5 @@ pub struct Subs {
 #[derive(Deserialize, Serialize)]
 pub struct Calls {
     pub issued: HashSet<Addr>,
+    pub closed: HashSet<Addr>,
 }

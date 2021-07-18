@@ -22,6 +22,7 @@ pub struct State {
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
     pub issued_calls: HashSet<Addr>,
+    pub closed_calls: HashSet<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

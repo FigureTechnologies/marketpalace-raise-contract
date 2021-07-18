@@ -43,6 +43,7 @@ pub fn instantiate(
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
         issued_calls: HashSet::new(),
+        closed_calls: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
 
@@ -286,6 +287,15 @@ pub fn try_close_calls(
         return Err(contract_error("only gp or admin can close calls"));
     }
 
+    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+        calls.iter().for_each(|call| {
+            state.issued_calls.remove(call);
+            state.closed_calls.insert(call.clone());
+        });
+
+        Ok(state)
+    })?;
+
     let close_messages = calls
         .into_iter()
         .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CapitalCallMsg::Close {}, vec![]).unwrap()))
@@ -383,6 +393,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }),
         QueryMsg::GetCalls {} => to_binary(&Calls {
             issued: state.issued_calls,
+            closed: state.closed_calls,
         }),
     }
 }
@@ -395,12 +406,7 @@ mod tests {
     use cosmwasm_std::testing::{
         mock_dependencies, mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,
     };
-    use cosmwasm_std::{
-        coin, coins, from_binary, Addr, Coin, ContractResult, CosmosMsg, CustomQuery, Empty,
-        OwnedDeps, Querier, QueryRequest, SystemError, SystemResult, WasmQuery,
-    };
-    use provwasm_mocks::must_read_binary_file;
-    use provwasm_std::{Marker, MarkerMsgParams, ProvenanceMsgParams};
+    use cosmwasm_std::{from_binary, Addr, ContractResult, OwnedDeps, SystemError, SystemResult};
 
     fn inst_msg() -> InstantiateMsg {
         InstantiateMsg {
@@ -431,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn try_propose_and_accept_subscription_issue_calls() {
+    fn try_propose_and_accept_subscription_issue_and_close_calls() {
         let mut deps = OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
@@ -520,5 +526,23 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
         let calls: Calls = from_binary(&res).unwrap();
         assert_eq!(1, calls.issued.len());
+
+        // close call
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseCalls {
+                calls: vec![(Addr::unchecked("call_1"))].into_iter().collect(),
+            },
+        )
+        .unwrap();
+        assert_eq!(1, res.messages.len());
+
+        // assert that the closed call is stored
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
+        let calls: Calls = from_binary(&res).unwrap();
+        assert_eq!(0, calls.issued.len());
+        assert_eq!(1, calls.closed.len());
     }
 }
