@@ -428,24 +428,36 @@ mod tests {
     }
 
     #[test]
-    fn try_propose_and_accept_subscription() {
+    fn try_propose_and_accept_subscription_issue_calls() {
         let mut deps = OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
             querier: MockContractQuerier {
                 wasm_smart_handler: |contract_addr, _msg| {
-                    assert_eq!("sub_1", contract_addr);
-
-                    SystemResult::Ok(ContractResult::Ok(
-                        to_binary(&SubTerms {
-                            owner: Addr::unchecked("lp"),
-                            raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                            capital_denom: String::from("stable_coin"),
-                            min_commitment: 10_000,
-                            max_commitment: 50_000,
+                    if contract_addr == "sub_1" {
+                        SystemResult::Ok(ContractResult::Ok(
+                            to_binary(&SubTerms {
+                                owner: Addr::unchecked("lp"),
+                                raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                                capital_denom: String::from("stable_coin"),
+                                min_commitment: 10_000,
+                                max_commitment: 50_000,
+                            })
+                            .unwrap(),
+                        ))
+                    } else if contract_addr == "call_1" {
+                        SystemResult::Ok(ContractResult::Ok(
+                            to_binary(&CallTerms {
+                                subscription: Addr::unchecked("sub_1"),
+                                raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                            })
+                            .unwrap(),
+                        ))
+                    } else {
+                        SystemResult::Err(SystemError::UnsupportedRequest {
+                            kind: String::from("not mocked"),
                         })
-                        .unwrap(),
-                    ))
+                    }
                 },
             },
         };
@@ -488,5 +500,17 @@ mod tests {
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(0, subs.pending_review.len());
         assert_eq!(1, subs.accepted.len());
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::IssueCalls {
+                calls: vec![(Addr::unchecked("call_1"))].into_iter().collect(),
+            },
+        )
+        .unwrap();
+        assert_eq!(2, res.messages.len());
     }
 }
