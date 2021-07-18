@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use crate::call::{CallQueryMsg, CallTerms};
 use crate::error::ContractError;
 use crate::msg::{HandleMsg, InstantiateMsg, QueryMsg, Subs};
 use crate::state::{config, config_read, State, Status, CONFIG_KEY};
@@ -241,14 +242,10 @@ pub fn try_issue_calls(
     let calls = calls
         .into_iter()
         .flat_map(|call| {
-            let contract: CapitalCallState = from_slice(
-                &deps
-                    .querier
-                    .query_wasm_raw(call.clone(), CONFIG_KEY)
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap();
+            let terms: CallTerms = deps
+                .querier
+                .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
+                .expect("terms");
 
             let grant = grant_marker_access(
                 state.asset_denom.clone(),
@@ -259,7 +256,7 @@ pub fn try_issue_calls(
 
             let issue = CosmosMsg::Wasm(
                 wasm_execute(
-                    contract.subscription,
+                    terms.subscription,
                     &SubExecuteMsg::IssueCapitalCall { capital_call: call },
                     vec![],
                 )
