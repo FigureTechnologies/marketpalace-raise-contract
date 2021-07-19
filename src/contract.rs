@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn try_propose_and_accept_subscription_issue_and_close_calls() {
+    fn sub_and_call_integration() {
         let mut deps = OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
@@ -544,5 +544,26 @@ mod tests {
         let calls: Calls = from_binary(&res).unwrap();
         assert_eq!(0, calls.issued.len());
         assert_eq!(1, calls.closed.len());
+    }
+
+    #[test]
+    fn issue_distributions() {
+        let mut deps = mock_dependencies(&[]);
+
+        // we can just call .unwrap() to assert this was a success
+        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[coin(10_000, "stable_coin")]),
+            HandleMsg::IssueDistributions {
+                distributions: vec![(Addr::unchecked("sub_1"), 10_000 as u64)]
+                    .into_iter()
+                    .collect(),
+            },
+        )
+        .unwrap();
+        assert_eq!(1, res.messages.len());
     }
 }
