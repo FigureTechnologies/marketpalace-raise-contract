@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, to_binary, wasm_execute, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps,
-    DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, Coin, CosmosMsg,
+    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -376,7 +376,15 @@ pub fn try_redeem_capital(
     Ok(Response {
         submessages: vec![],
         messages: vec![send],
-        attributes: vec![],
+        attributes: match memo {
+            Some(memo) => {
+                vec![Attribute {
+                    key: String::from("memo"),
+                    value: memo,
+                }]
+            }
+            None => vec![],
+        },
         data: Option::None,
     })
 }
