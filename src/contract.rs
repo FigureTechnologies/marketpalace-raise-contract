@@ -566,4 +566,25 @@ mod tests {
         .unwrap();
         assert_eq!(1, res.messages.len());
     }
+
+    #[test]
+    fn redeem_capital() {
+        let mut deps = mock_dependencies(&[]);
+
+        // we can just call .unwrap() to assert this was a success
+        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::RedeemCapital {
+                to: Addr::unchecked("omni"),
+                amount: 10_000,
+                memo: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(1, res.messages.len());
+    }
 }
