@@ -6,6 +6,7 @@ use cosmwasm_std::Addr;
 pub struct CallTerms {
     pub subscription: Addr,
     pub raise: Addr,
+    pub amount: u64,
 }
 
 #[derive(Serialize)]

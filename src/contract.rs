@@ -3,8 +3,8 @@ use cosmwasm_std::{
     Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
-    activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
-    ProvenanceQuerier,
+    activate_marker, create_marker, grant_marker_access, withdraw_coins, MarkerAccess, MarkerType,
+    ProvenanceMsg, ProvenanceQuerier,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,7 +51,12 @@ pub fn instantiate(
     let grant = grant_marker_access(
         state.asset_denom.clone(),
         _env.contract.address,
-        vec![MarkerAccess::Admin, MarkerAccess::Mint, MarkerAccess::Burn],
+        vec![
+            MarkerAccess::Admin,
+            MarkerAccess::Mint,
+            MarkerAccess::Burn,
+            MarkerAccess::Withdraw,
+        ],
     )?;
     let activate = activate_marker(state.asset_denom)?;
 
@@ -251,7 +256,7 @@ pub fn try_issue_calls(
             let grant = grant_marker_access(
                 state.asset_denom.clone(),
                 call.clone(),
-                vec![MarkerAccess::Withdraw],
+                vec![MarkerAccess::Transfer],
             )
             .unwrap();
 
@@ -298,7 +303,23 @@ pub fn try_close_calls(
 
     let close_messages = calls
         .into_iter()
-        .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CapitalCallMsg::Close {}, vec![]).unwrap()))
+        .flat_map(|call| {
+            let terms: CallTerms = deps
+                .querier
+                .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
+                .expect("terms");
+
+            vec![
+                withdraw_coins(
+                    state.asset_denom.clone(),
+                    terms.amount as u128,
+                    state.asset_denom.clone(),
+                    call.clone(),
+                )
+                .unwrap(),
+                CosmosMsg::Wasm(wasm_execute(call, &CapitalCallMsg::Close {}, vec![]).unwrap()),
+            ]
+        })
         .collect();
 
     Ok(Response {
@@ -467,6 +488,7 @@ mod tests {
                             to_binary(&CallTerms {
                                 subscription: Addr::unchecked("sub_1"),
                                 raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                                amount: 10_0000,
                             })
                             .unwrap(),
                         ))
@@ -545,7 +567,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(1, res.messages.len());
+        assert_eq!(2, res.messages.len());
 
         // assert that the closed call is stored
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
