@@ -439,11 +439,11 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use crate::mock::MockContractQuerier;
+    use crate::mock::{wasm_smart_mock_dependencies};
     use cosmwasm_std::testing::{
-        mock_dependencies, mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,
+        mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR,
     };
-    use cosmwasm_std::{from_binary, Addr, ContractResult, OwnedDeps, SystemError, SystemResult};
+    use cosmwasm_std::{from_binary, Addr, ContractResult, SystemError, SystemResult};
 
     fn inst_msg() -> InstantiateMsg {
         InstantiateMsg {
@@ -475,39 +475,30 @@ mod tests {
 
     #[test]
     fn sub_and_call_integration() {
-        let mut deps = OwnedDeps {
-            storage: MockStorage::default(),
-            api: MockApi::default(),
-            querier: MockContractQuerier {
-                wasm_smart_handler: |contract_addr, _msg| {
-                    if contract_addr == "sub_1" {
-                        SystemResult::Ok(ContractResult::Ok(
-                            to_binary(&SubTerms {
-                                owner: Addr::unchecked("lp"),
-                                raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                                capital_denom: String::from("stable_coin"),
-                                min_commitment: 10_000,
-                                max_commitment: 50_000,
-                            })
-                            .unwrap(),
-                        ))
-                    } else if contract_addr == "call_1" {
-                        SystemResult::Ok(ContractResult::Ok(
-                            to_binary(&CallTerms {
-                                subscription: Addr::unchecked("sub_1"),
-                                raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                                amount: 10_0000,
-                            })
-                            .unwrap(),
-                        ))
-                    } else {
-                        SystemResult::Err(SystemError::UnsupportedRequest {
-                            kind: String::from("not mocked"),
-                        })
-                    }
-                },
-            },
-        };
+        let mut deps =
+            wasm_smart_mock_dependencies(|contract_addr, _msg| match &contract_addr[..] {
+                "sub_1" => SystemResult::Ok(ContractResult::Ok(
+                    to_binary(&SubTerms {
+                        owner: Addr::unchecked("lp"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        capital_denom: String::from("stable_coin"),
+                        min_commitment: 10_000,
+                        max_commitment: 50_000,
+                    })
+                    .unwrap(),
+                )),
+                "call_1" => SystemResult::Ok(ContractResult::Ok(
+                    to_binary(&CallTerms {
+                        subscription: Addr::unchecked("sub_1"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        amount: 10_0000,
+                    })
+                    .unwrap(),
+                )),
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: String::from("not mocked"),
+                }),
+            });
 
         // init contract as gp
         instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();

@@ -1,6 +1,7 @@
+use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
-    from_slice, Binary, ContractResult, Empty, Querier, QueryRequest, SystemError, SystemResult,
-    WasmQuery,
+    from_slice, Binary, ContractResult, Empty, OwnedDeps, Querier, QueryRequest, SystemError,
+    SystemResult, WasmQuery,
 };
 
 pub type MockWasmSmartHandler = fn(String, Binary) -> SystemResult<ContractResult<Binary>>;
@@ -34,5 +35,15 @@ impl Querier for MockContractQuerier {
                 kind: String::from("only support wasm"),
             }),
         };
+    }
+}
+
+pub fn wasm_smart_mock_dependencies(
+    wasm_smart_handler: MockWasmSmartHandler,
+) -> OwnedDeps<MockStorage, MockApi, MockContractQuerier> {
+    OwnedDeps {
+        storage: MockStorage::default(),
+        api: MockApi::default(),
+        querier: MockContractQuerier { wasm_smart_handler },
     }
 }
