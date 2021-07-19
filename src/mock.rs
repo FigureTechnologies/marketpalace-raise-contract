@@ -12,27 +12,23 @@ pub struct MockContractQuerier {
 
 impl Querier for MockContractQuerier {
     fn raw_query(&self, bin_request: &[u8]) -> SystemResult<ContractResult<Binary>> {
-        let request: QueryRequest<Empty> = match from_slice(bin_request) {
-            Ok(v) => v,
-            Err(e) => {
-                return SystemResult::Err(SystemError::InvalidRequest {
-                    error: format!("Parsing query request: {}", e),
-                    request: bin_request.into(),
-                })
-            }
-        };
-
-        return match request {
-            QueryRequest::Wasm(msg) => match msg {
-                WasmQuery::Smart { contract_addr, msg } => {
-                    (self.wasm_smart_handler)(contract_addr, msg)
-                }
+        return match from_slice::<QueryRequest<Empty>>(bin_request) {
+            Ok(value) => match value {
+                QueryRequest::Wasm(msg) => match msg {
+                    WasmQuery::Smart { contract_addr, msg } => {
+                        (self.wasm_smart_handler)(contract_addr, msg)
+                    }
+                    _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                        kind: String::from("only support smart wasm"),
+                    }),
+                },
                 _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: String::from("only support smart wasm"),
+                    kind: String::from("only support wasm"),
                 }),
             },
-            _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                kind: String::from("only support wasm"),
+            Err(e) => SystemResult::Err(SystemError::InvalidRequest {
+                error: format!("Parsing query request: {}", e),
+                request: bin_request.into(),
             }),
         };
     }
