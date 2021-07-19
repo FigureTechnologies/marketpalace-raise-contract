@@ -213,11 +213,19 @@ pub fn try_accept_subscriptions(
         submessages: vec![],
         messages: subscriptions
             .into_iter()
-            .map(|(subscription, commitment)| {
-                CosmosMsg::Wasm(
-                    wasm_execute(subscription, &SubExecuteMsg::Accept { commitment }, vec![])
-                        .unwrap(),
-                )
+            .flat_map(|(subscription, commitment)| {
+                vec![
+                    grant_marker_access(
+                        state.asset_denom.clone(),
+                        subscription.clone(),
+                        vec![MarkerAccess::Transfer],
+                    )
+                    .unwrap(),
+                    CosmosMsg::Wasm(
+                        wasm_execute(subscription, &SubExecuteMsg::Accept { commitment }, vec![])
+                            .unwrap(),
+                    ),
+                ]
             })
             .collect(),
         attributes: vec![],
@@ -532,7 +540,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(1, res.messages.len());
+        assert_eq!(2, res.messages.len());
 
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
