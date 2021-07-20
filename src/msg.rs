@@ -31,6 +31,9 @@ pub enum HandleMsg {
     CloseCalls {
         calls: Vec<Addr>,
     },
+    IssueRedemptions {
+        redemptions: HashSet<Redemption>,
+    },
     IssueDistributions {
         distributions: HashMap<Addr, u64>,
     },
@@ -39,6 +42,19 @@ pub enum HandleMsg {
         amount: u64,
         memo: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Hash, Eq, JsonSchema)]
+pub struct Redemption {
+    pub subscription: Addr,
+    pub asset: u64,
+    pub capital: u64,
+}
+
+impl PartialEq for Redemption {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

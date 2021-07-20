@@ -7,6 +7,7 @@ use cosmwasm_std::Addr;
 pub enum SubExecuteMsg {
     Accept { commitment: u64 },
     IssueCapitalCall { capital_call: Addr },
+    IssueRedemption { redemption: u64 },
     IssueDistribution {},
 }
 

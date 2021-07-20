@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use crate::call::{CallQueryMsg, CallTerms};
 use crate::error::ContractError;
-use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Subs};
+use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs};
 use crate::state::{config, config_read, State, Status};
 use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
 
@@ -85,6 +85,9 @@ pub fn execute(
         }
         HandleMsg::IssueCalls { calls } => try_issue_calls(deps, info, calls),
         HandleMsg::CloseCalls { calls } => try_close_calls(deps, info, calls),
+        HandleMsg::IssueRedemptions { redemptions } => {
+            try_issue_redemptions(deps, info, redemptions)
+        }
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
@@ -338,6 +341,54 @@ pub fn try_close_calls(
     })
 }
 
+pub fn try_issue_redemptions(
+    deps: DepsMut,
+    info: MessageInfo,
+    redemptions: HashSet<Redemption>,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp && info.sender != state.admin {
+        return Err(contract_error("only gp or admin can issue redemptions"));
+    }
+
+    let capital = info.funds.first().unwrap();
+    if capital.denom != state.capital_denom {
+        return Err(contract_error("incorrect capital denom"));
+    }
+
+    let total = redemptions.iter().fold(0, |sum, next| sum + next.capital);
+    if capital.amount.u128() as u64 != total {
+        return Err(contract_error("incorrect capital sent for all redemptions"));
+    }
+
+    let redemptions = redemptions
+        .into_iter()
+        .map(|redemption| {
+            CosmosMsg::Wasm(
+                wasm_execute(
+                    redemption.subscription,
+                    &SubExecuteMsg::IssueRedemption {
+                        redemption: redemption.asset,
+                    },
+                    vec![coin(
+                        redemption.capital as u128,
+                        state.capital_denom.clone(),
+                    )],
+                )
+                .unwrap(),
+            )
+        })
+        .collect();
+
+    Ok(Response {
+        submessages: vec![],
+        messages: redemptions,
+        attributes: vec![],
+        data: Option::None,
+    })
+}
+
 pub fn try_issue_distributions(
     deps: DepsMut,
     info: MessageInfo,
@@ -439,10 +490,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use crate::mock::{wasm_smart_mock_dependencies};
-    use cosmwasm_std::testing::{
-        mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR,
-    };
+    use crate::mock::wasm_smart_mock_dependencies;
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{from_binary, Addr, ContractResult, SystemError, SystemResult};
 
     fn inst_msg() -> InstantiateMsg {
