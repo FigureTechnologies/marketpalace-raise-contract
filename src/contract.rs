@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn sub_and_call_integration() {
         let mut deps =
-            wasm_smart_mock_dependencies(|contract_addr, _msg| match &contract_addr[..] {
+            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
                 "sub_1" => SystemResult::Ok(ContractResult::Ok(
                     to_binary(&SubTerms {
                         owner: Addr::unchecked("lp"),
