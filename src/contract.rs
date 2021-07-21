@@ -37,9 +37,9 @@ pub fn instantiate(
         qualified_tags: msg.qualified_tags,
         asset_denom: msg.asset_denom.clone(),
         capital_denom: msg.capital_denom,
-        target: msg.target.clone(),
-        min_commitment: msg.min_commitment.clone(),
-        max_commitment: msg.max_commitment.clone(),
+        target: msg.target,
+        min_commitment: msg.min_commitment,
+        max_commitment: msg.max_commitment,
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
         issued_calls: HashSet::new(),
@@ -248,11 +248,7 @@ pub fn try_issue_calls(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.issued_calls = state
-            .issued_calls
-            .union(&calls)
-            .map(|it| it.clone())
-            .collect();
+        state.issued_calls = state.issued_calls.union(&calls).cloned().collect();
         Ok(state)
     })?;
 

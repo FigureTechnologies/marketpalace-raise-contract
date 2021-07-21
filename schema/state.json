@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State",
+  "type": "object",
+  "required": [
+    "accepted_subs",
+    "admin",
+    "asset_denom",
+    "capital_call_code_id",
+    "capital_denom",
+    "closed_calls",
+    "gp",
+    "issued_calls",
+    "max_commitment",
+    "min_commitment",
+    "pending_review_subs",
+    "qualified_tags",
+    "status",
+    "target"
+  ],
+  "properties": {
+    "accepted_subs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Addr"
+      },
+      "uniqueItems": true
+    },
+    "admin": {
+      "$ref": "#/definitions/Addr"
+    },
+    "asset_denom": {
+      "type": "string"
+    },
+    "capital_call_code_id": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "capital_denom": {
+      "type": "string"
+    },
+    "closed_calls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Addr"
+      },
+      "uniqueItems": true
+    },
+    "gp": {
+      "$ref": "#/definitions/Addr"
+    },
+    "issued_calls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Addr"
+      },
+      "uniqueItems": true
+    },
+    "max_commitment": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "min_commitment": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "pending_review_subs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Addr"
+      },
+      "uniqueItems": true
+    },
+    "qualified_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "$ref": "#/definitions/Status"
+    },
+    "target": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "Addr": {
+      "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+      "type": "string"
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "Active"
+      ]
+    }
+  }
+}

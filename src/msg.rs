@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 use cosmwasm_std::Addr;
 
@@ -44,7 +45,7 @@ pub enum HandleMsg {
     },
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, Hash, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
 pub struct Redemption {
     pub subscription: Addr,
     pub asset: u64,
@@ -54,6 +55,15 @@ pub struct Redemption {
 impl PartialEq for Redemption {
     fn eq(&self, other: &Self) -> bool {
         self.subscription == other.subscription
+    }
+}
+
+impl Hash for Redemption {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state)
     }
 }
 
