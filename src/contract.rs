@@ -369,7 +369,7 @@ pub fn try_issue_redemptions(
                 wasm_execute(
                     redemption.subscription,
                     &SubExecuteMsg::IssueRedemption {
-                        redemption: redemption.asset,
+                        redemption: coin(redemption.asset as u128, state.asset_denom.clone()),
                     },
                     vec![coin(
                         redemption.capital as u128,

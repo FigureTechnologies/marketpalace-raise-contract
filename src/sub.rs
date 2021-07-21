@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr, Coin};
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubExecuteMsg {
     Accept { commitment: u64 },
     IssueCapitalCall { capital_call: Addr },
-    IssueRedemption { redemption: u64 },
+    IssueRedemption { redemption: Coin },
     IssueDistribution {},
 }
 
