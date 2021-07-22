@@ -3,8 +3,8 @@ use cosmwasm_std::{
     Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
-    activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType,
-    ProvenanceMsg, ProvenanceQuerier,
+    activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
+    ProvenanceQuerier,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -198,8 +198,8 @@ pub fn try_accept_subscriptions(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can accept subscriptions"));
+    if info.sender != state.gp {
+        return Err(contract_error("only gp can accept subscriptions"));
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -242,8 +242,8 @@ pub fn try_issue_calls(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can issue calls"));
+    if info.sender != state.gp {
+        return Err(contract_error("only gp can issue calls"));
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -294,8 +294,8 @@ pub fn try_close_calls(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can close calls"));
+    if info.sender != state.gp {
+        return Err(contract_error("only gp can close calls"));
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -327,8 +327,8 @@ pub fn try_issue_redemptions(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can issue redemptions"));
+    if info.sender != state.gp {
+        return Err(contract_error("only gp can issue redemptions"));
     }
 
     let capital = info.funds.first().unwrap();
@@ -375,8 +375,8 @@ pub fn try_issue_distributions(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
-        return Err(contract_error("only gp or admin can issue distributions"));
+    if info.sender != state.gp {
+        return Err(contract_error("only gp can issue distributions"));
     }
 
     let capital = info.funds.first().unwrap();
@@ -422,7 +422,7 @@ pub fn try_redeem_capital(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.gp && info.sender != state.admin {
+    if info.sender != state.gp {
         return Err(contract_error("only gp can redeem capital"));
     }
 
