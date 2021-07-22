@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use crate::call::{CallQueryMsg, CallTerms};
 use crate::error::ContractError;
-use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs};
+use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
 use crate::state::{config, config_read, State, Status};
 use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
 
@@ -31,7 +31,6 @@ pub fn instantiate(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = State {
         status: Status::Active,
-        capital_call_code_id: msg.capital_call_code_id,
         gp: info.sender,
         admin: msg.admin,
         qualified_tags: msg.qualified_tags,
@@ -471,6 +470,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
     match msg {
         QueryMsg::GetStatus {} => to_binary(&state.status),
+        QueryMsg::GetTerms {} => to_binary(&Terms {
+            qualified_tags: state.qualified_tags,
+            asset_denom: state.asset_denom,
+            capital_denom: state.capital_denom,
+            target: state.target,
+            min_commitment: state.min_commitment,
+            max_commitment: state.max_commitment,
+        }),
         QueryMsg::GetSubs {} => to_binary(&Subs {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
@@ -490,36 +497,47 @@ mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{from_binary, Addr, ContractResult, SystemError, SystemResult};
 
-    fn inst_msg() -> InstantiateMsg {
-        InstantiateMsg {
-            capital_call_code_id: 117,
-            admin: Addr::unchecked("tp1apnhcu9x5cz2l8hhgnj0hg7ez53jah7hcan000"),
-            qualified_tags: vec![],
-            asset_denom: String::from("funny_money"),
-            capital_denom: String::from("stable_coin"),
-            target: 5_000_000,
-            min_commitment: 10_000,
-            max_commitment: 100_000,
-        }
-    }
-
     #[test]
     fn initialization() {
         let mut deps = mock_dependencies(&[]);
-        let info = mock_info("creator", &[]);
+        let info = mock_info("gp", &[]);
 
-        // we can just call .unwrap() to assert this was a success
-        let res = instantiate(deps.as_mut(), mock_env(), info, inst_msg()).unwrap();
+        // instantiate and verify we have 3 messages (create, grant, & activate)
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+            },
+        )
+        .unwrap();
         assert_eq!(3, res.messages.len());
 
-        // it worked, let's query the state
+        // verify raise is in active status
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
         let status: Status = from_binary(&res).unwrap();
         assert_eq!(Status::Active, status);
+
+        // verify that terms of raise are correct
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetTerms {}).unwrap();
+        let terms: Terms = from_binary(&res).unwrap();
+        assert_eq!(0, terms.qualified_tags.len());
+        assert_eq!("fund_coin", terms.asset_denom);
+        assert_eq!("stable_coin", terms.capital_denom);
+        assert_eq!(5_000_000, terms.target);
+        assert_eq!(10_000, terms.min_commitment);
+        assert_eq!(100_000, terms.max_commitment);
     }
 
     #[test]
-    fn sub_and_call_integration() {
+    fn propose_subscription() {
         let mut deps =
             wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
                 "sub_1" => SystemResult::Ok(ContractResult::Ok(
@@ -532,21 +550,28 @@ mod tests {
                     })
                     .unwrap(),
                 )),
-                "call_1" => SystemResult::Ok(ContractResult::Ok(
-                    to_binary(&CallTerms {
-                        subscription: Addr::unchecked("sub_1"),
-                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        amount: 10_0000,
-                    })
-                    .unwrap(),
-                )),
                 _ => SystemResult::Err(SystemError::UnsupportedRequest {
                     kind: String::from("not mocked"),
                 }),
             });
 
-        // init contract as gp
-        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         // propose a sub as lp
         execute(
@@ -563,6 +588,29 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(1, subs.pending_review.len());
+    }
+
+    #[test]
+    fn accept_subscription() {
+        let mut deps = mock_dependencies(&[]);
+
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         // accept pending sub as gp
         let res = execute(
@@ -583,6 +631,42 @@ mod tests {
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(0, subs.pending_review.len());
         assert_eq!(1, subs.accepted.len());
+    }
+
+    #[test]
+    fn issue_calls() {
+        let mut deps =
+            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
+                "call_1" => SystemResult::Ok(ContractResult::Ok(
+                    to_binary(&CallTerms {
+                        subscription: Addr::unchecked("sub_1"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        amount: 10_0000,
+                    })
+                    .unwrap(),
+                )),
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: String::from("not mocked"),
+                }),
+            });
+
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         // issue calls
         let res = execute(
@@ -600,6 +684,42 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
         let calls: Calls = from_binary(&res).unwrap();
         assert_eq!(1, calls.issued.len());
+    }
+
+    #[test]
+    fn call_integration() {
+        let mut deps =
+            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
+                "call_1" => SystemResult::Ok(ContractResult::Ok(
+                    to_binary(&CallTerms {
+                        subscription: Addr::unchecked("sub_1"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        amount: 10_0000,
+                    })
+                    .unwrap(),
+                )),
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: String::from("not mocked"),
+                }),
+            });
+
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         // close call
         let res = execute(
@@ -624,8 +744,23 @@ mod tests {
     fn issue_distributions() {
         let mut deps = mock_dependencies(&[]);
 
-        // we can just call .unwrap() to assert this was a success
-        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         let res = execute(
             deps.as_mut(),
@@ -645,8 +780,23 @@ mod tests {
     fn redeem_capital() {
         let mut deps = mock_dependencies(&[]);
 
-        // we can just call .unwrap() to assert this was a success
-        instantiate(deps.as_mut(), mock_env(), mock_info("gp", &[]), inst_msg()).unwrap();
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
 
         let res = execute(
             deps.as_mut(),

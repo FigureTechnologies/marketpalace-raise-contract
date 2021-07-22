@@ -7,7 +7,6 @@ use cosmwasm_std::Addr;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub capital_call_code_id: u64,
     pub admin: Addr,
     pub qualified_tags: Vec<String>,
     pub asset_denom: String,
@@ -71,8 +70,19 @@ impl Hash for Redemption {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetStatus {},
+    GetTerms {},
     GetSubs {},
     GetCalls {},
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Terms {
+    pub qualified_tags: Vec<String>,
+    pub asset_denom: String,
+    pub capital_denom: String,
+    pub target: u64,
+    pub min_commitment: u64,
+    pub max_commitment: u64,
 }
 
 #[derive(Deserialize, Serialize)]
