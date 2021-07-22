@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn call_integration() {
+    fn close_calls() {
         let mut deps =
             wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
                 "call_1" => SystemResult::Ok(ContractResult::Ok(
