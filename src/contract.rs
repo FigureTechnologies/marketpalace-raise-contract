@@ -579,7 +579,7 @@ mod tests {
             })
             .unwrap();
 
-        let result = execute(
+        let res = execute(
             deps.as_mut(),
             mock_env(),
             mock_info("bad_actor", &vec![]),
@@ -587,7 +587,7 @@ mod tests {
                 gp: Addr::unchecked("bad_actor"),
             },
         );
-        assert_eq!(true, result.is_err());
+        assert_eq!(true, res.is_err());
     }
 
     #[test]
