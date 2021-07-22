@@ -17,6 +17,18 @@
     {
       "type": "object",
       "required": [
+        "get_terms"
+      ],
+      "properties": {
+        "get_terms": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "get_subs"
       ],
       "properties": {

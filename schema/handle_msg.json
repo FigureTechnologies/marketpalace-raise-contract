@@ -5,6 +5,26 @@
     {
       "type": "object",
       "required": [
+        "recover"
+      ],
+      "properties": {
+        "recover": {
+          "type": "object",
+          "required": [
+            "gp"
+          ],
+          "properties": {
+            "gp": {
+              "$ref": "#/definitions/Addr"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "propose_subscription"
       ],
       "properties": {

@@ -1,16 +1,15 @@
 use cosmwasm_std::{
-    coin, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, Coin, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, CosmosMsg, Deps,
+    DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
     ProvenanceQuerier,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::call::{CallQueryMsg, CallTerms};
+use crate::call::{CallMsg, CallQueryMsg, CallTerms};
 use crate::error::ContractError;
 use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
 use crate::state::{config, config_read, State, Status};
@@ -76,6 +75,7 @@ pub fn execute(
     msg: HandleMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
+        HandleMsg::Recover { gp } => try_recover(deps, info, gp),
         HandleMsg::ProposeSubscription { subscription } => {
             try_propose_subscription(deps, env, info, subscription)
         }
@@ -96,24 +96,28 @@ pub fn execute(
     }
 }
 
-#[derive(Deserialize)]
-pub struct CapitalCallState {
-    pub subscription: Addr,
-    pub amount: u64,
-}
+pub fn try_recover(
+    deps: DepsMut,
+    info: MessageInfo,
+    gp: Addr,
+) -> Result<Response<ProvenanceMsg>, ContractError> {
+    let state = config_read(deps.storage).load()?;
 
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct InstantiateCapitalCallMsg {
-    pub subscription: Addr,
-    pub capital: Coin,
-    pub asset: Coin,
-}
+    if info.sender != state.admin {
+        return Err(contract_error("only admin can recover raise"));
+    }
 
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CapitalCallMsg {
-    Close {},
+    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+        state.gp = gp;
+        Ok(state)
+    })?;
+
+    Ok(Response {
+        submessages: vec![],
+        messages: vec![],
+        attributes: vec![],
+        data: Option::None,
+    })
 }
 
 pub fn try_propose_subscription(
@@ -309,7 +313,7 @@ pub fn try_close_calls(
 
     let close_messages = calls
         .into_iter()
-        .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CapitalCallMsg::Close {}, vec![]).unwrap()))
+        .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CallMsg::Close {}, vec![]).unwrap()))
         .collect();
 
     Ok(Response {
@@ -518,6 +522,72 @@ mod tests {
         assert_eq!(5_000_000, terms.target);
         assert_eq!(10_000, terms.min_commitment);
         assert_eq!(100_000, terms.max_commitment);
+    }
+
+    #[test]
+    fn recover() {
+        let mut deps = mock_dependencies(&vec![]);
+
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("gp_2"),
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn fail_bad_actor_recover() {
+        let mut deps = mock_dependencies(&vec![]);
+
+        config(&mut deps.storage)
+            .save(&State {
+                status: Status::Active,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                qualified_tags: vec![],
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_calls: HashSet::new(),
+                closed_calls: HashSet::new(),
+            })
+            .unwrap();
+
+        let result = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("bad_actor"),
+            },
+        );
+        assert_eq!(true, result.is_err());
     }
 
     #[test]

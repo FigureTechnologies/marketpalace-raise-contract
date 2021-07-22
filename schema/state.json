@@ -6,7 +6,6 @@
     "accepted_subs",
     "admin",
     "asset_denom",
-    "capital_call_code_id",
     "capital_denom",
     "closed_calls",
     "gp",
@@ -31,11 +30,6 @@
     },
     "asset_denom": {
       "type": "string"
-    },
-    "capital_call_code_id": {
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
     },
     "capital_denom": {
       "type": "string"
