@@ -6,8 +6,6 @@
     "admin",
     "asset_denom",
     "capital_denom",
-    "max_commitment",
-    "min_commitment",
     "qualified_tags",
     "target"
   ],
@@ -22,12 +20,18 @@
       "type": "string"
     },
     "max_commitment": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "minimum": 0.0
     },
     "min_commitment": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "minimum": 0.0
     },

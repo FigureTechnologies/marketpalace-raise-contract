@@ -10,8 +10,6 @@
     "closed_calls",
     "gp",
     "issued_calls",
-    "max_commitment",
-    "min_commitment",
     "pending_review_subs",
     "qualified_tags",
     "status",
@@ -52,12 +50,18 @@
       "uniqueItems": true
     },
     "max_commitment": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "minimum": 0.0
     },
     "min_commitment": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "minimum": 0.0
     },

@@ -12,8 +12,8 @@ pub struct InstantiateMsg {
     pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,
-    pub min_commitment: u64,
-    pub max_commitment: u64,
+    pub min_commitment: Option<u64>,
+    pub max_commitment: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -84,8 +84,8 @@ pub struct Terms {
     pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,
-    pub min_commitment: u64,
-    pub max_commitment: u64,
+    pub min_commitment: Option<u64>,
+    pub max_commitment: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize)]

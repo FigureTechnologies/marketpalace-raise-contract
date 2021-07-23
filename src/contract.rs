@@ -155,16 +155,20 @@ pub fn try_propose_subscription(
         ));
     }
 
-    if terms.max_commitment < state.min_commitment {
-        return Err(contract_error(
-            "capital promise max commitment is below raise minumum commitment",
-        ));
+    if let Some(min) = state.min_commitment {
+        if terms.max_commitment < min {
+            return Err(contract_error(
+                "capital promise max commitment is below raise minumum commitment",
+            ));
+        }
     }
 
-    if terms.min_commitment > state.max_commitment {
-        return Err(contract_error(
-            "capital promise min commitment exceeds raise maximum commitment",
-        ));
+    if let Some(max) = state.max_commitment {
+        if terms.min_commitment > max {
+            return Err(contract_error(
+                "capital promise min commitment exceeds raise maximum commitment",
+            ));
+        }
     }
 
     if !state.qualified_tags.is_empty() {
@@ -501,8 +505,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
             },
         )
         .unwrap();
@@ -520,8 +524,8 @@ mod tests {
         assert_eq!("fund_coin", terms.asset_denom);
         assert_eq!("stable_coin", terms.capital_denom);
         assert_eq!(5_000_000, terms.target);
-        assert_eq!(10_000, terms.min_commitment);
-        assert_eq!(100_000, terms.max_commitment);
+        assert_eq!(10_000, terms.min_commitment.unwrap());
+        assert_eq!(100_000, terms.max_commitment.unwrap());
     }
 
     #[test]
@@ -537,8 +541,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -570,8 +574,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -618,8 +622,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -657,8 +661,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -713,8 +717,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -753,8 +757,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -794,8 +798,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
@@ -830,8 +834,8 @@ mod tests {
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
-                min_commitment: 10_000,
-                max_commitment: 100_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
