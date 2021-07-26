@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    coin, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, CosmosMsg, Deps,
-    DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, coins, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, CosmosMsg,
+    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
     activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
@@ -223,19 +223,15 @@ pub fn try_accept_subscriptions(
         submessages: vec![],
         messages: subscriptions
             .into_iter()
-            .flat_map(|(subscription, commitment)| {
-                vec![
-                    grant_marker_access(
-                        state.asset_denom.clone(),
-                        subscription.clone(),
-                        vec![MarkerAccess::Transfer],
+            .map(|(subscription, commitment)| {
+                CosmosMsg::Wasm(
+                    wasm_execute(
+                        subscription,
+                        &SubExecuteMsg::Accept {},
+                        coins(commitment as u128, state.asset_denom.clone()),
                     )
                     .unwrap(),
-                    CosmosMsg::Wasm(
-                        wasm_execute(subscription, &SubExecuteMsg::Accept { commitment }, vec![])
-                            .unwrap(),
-                    ),
-                ]
+                )
             })
             .collect(),
         attributes: vec![],
@@ -356,7 +352,7 @@ pub fn try_issue_redemptions(
                 wasm_execute(
                     redemption.subscription,
                     &SubExecuteMsg::IssueRedemption {
-                        redemption: coin(redemption.asset as u128, state.asset_denom.clone()),
+                        redemption: redemption.asset,
                     },
                     vec![coin(
                         redemption.capital as u128,
@@ -658,7 +654,7 @@ mod tests {
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 qualified_tags: vec![],
-                asset_denom: String::from("fund_coin"),
+                asset_denom: String::from("raise_1"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
                 min_commitment: Some(10_000),
@@ -682,7 +678,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(2, res.messages.len());
+        assert_eq!(1, res.messages.len());
 
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
