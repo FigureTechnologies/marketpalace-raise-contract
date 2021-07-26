@@ -313,7 +313,24 @@ pub fn try_close_calls(
 
     let close_messages = calls
         .into_iter()
-        .map(|call| CosmosMsg::Wasm(wasm_execute(call, &CallMsg::Close {}, vec![]).unwrap()))
+        .map(|call| {
+            let terms: CallTerms = deps
+                .querier
+                .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
+                .expect("terms");
+
+            CosmosMsg::Wasm(
+                wasm_execute(
+                    call,
+                    &CallMsg::Close {},
+                    coins(
+                        terms.amount as u128,
+                        format!("commitment_{}_{}", terms.subscription, terms.raise),
+                    ),
+                )
+                .unwrap(),
+            )
+        })
         .collect();
 
     Ok(Response {
@@ -742,7 +759,19 @@ mod tests {
 
     #[test]
     fn close_calls() {
-        let mut deps = mock_dependencies(&vec![]);
+        let mut deps = wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
+            "call_1" => SystemResult::Ok(ContractResult::Ok(
+                to_binary(&CallTerms {
+                    subscription: Addr::unchecked("sub_1"),
+                    raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                    amount: 10_0000,
+                })
+                .unwrap(),
+            )),
+            _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                kind: String::from("not mocked"),
+            }),
+        });
 
         config(&mut deps.storage)
             .save(&State {
