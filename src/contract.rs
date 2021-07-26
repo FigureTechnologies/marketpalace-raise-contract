@@ -257,29 +257,20 @@ pub fn try_issue_calls(
 
     let calls = calls
         .into_iter()
-        .flat_map(|call| {
+        .map(|call| {
             let terms: CallTerms = deps
                 .querier
                 .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
                 .expect("terms");
 
-            let grant = grant_marker_access(
-                state.asset_denom.clone(),
-                call.clone(),
-                vec![MarkerAccess::Withdraw],
-            )
-            .unwrap();
-
-            let issue = CosmosMsg::Wasm(
+            CosmosMsg::Wasm(
                 wasm_execute(
                     terms.subscription,
                     &SubExecuteMsg::IssueCapitalCall { capital_call: call },
                     vec![],
                 )
                 .unwrap(),
-            );
-
-            vec![grant, issue]
+            )
         })
         .collect();
 
@@ -749,7 +740,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(2, res.messages.len());
+        assert_eq!(1, res.messages.len());
 
         // assert that the issued call is stored
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
@@ -759,19 +750,20 @@ mod tests {
 
     #[test]
     fn close_calls() {
-        let mut deps = wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
-            "call_1" => SystemResult::Ok(ContractResult::Ok(
-                to_binary(&CallTerms {
-                    subscription: Addr::unchecked("sub_1"),
-                    raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                    amount: 10_0000,
-                })
-                .unwrap(),
-            )),
-            _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                kind: String::from("not mocked"),
-            }),
-        });
+        let mut deps =
+            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
+                "call_1" => SystemResult::Ok(ContractResult::Ok(
+                    to_binary(&CallTerms {
+                        subscription: Addr::unchecked("sub_1"),
+                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
+                        amount: 10_0000,
+                    })
+                    .unwrap(),
+                )),
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: String::from("not mocked"),
+                }),
+            });
 
         config(&mut deps.storage)
             .save(&State {
