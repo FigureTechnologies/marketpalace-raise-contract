@@ -24,7 +24,7 @@ fn contract_error(err: &str) -> ContractError {
 #[entry_point]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -33,7 +33,7 @@ pub fn instantiate(
         gp: info.sender,
         admin: msg.admin,
         qualified_tags: msg.qualified_tags,
-        asset_denom: msg.asset_denom.clone(),
+        asset_denom: format!("investment_{}", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
         min_commitment: msg.min_commitment,
@@ -45,10 +45,10 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    let create = create_marker(msg.target as u128, msg.asset_denom, MarkerType::Restricted)?;
+    let create = create_marker(msg.target as u128, state.asset_denom.clone(), MarkerType::Restricted)?;
     let grant = grant_marker_access(
         state.asset_denom.clone(),
-        _env.contract.address,
+        env.contract.address,
         vec![
             MarkerAccess::Admin,
             MarkerAccess::Mint,
@@ -506,7 +506,6 @@ mod tests {
             InstantiateMsg {
                 admin: Addr::unchecked("marketpalace"),
                 qualified_tags: vec![],
-                asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
                 min_commitment: Some(10_000),
