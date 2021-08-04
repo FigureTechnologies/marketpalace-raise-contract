@@ -3,8 +3,8 @@ use cosmwasm_std::{
     Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
 };
 use provwasm_std::{
-    activate_marker, create_marker, grant_marker_access, MarkerAccess, MarkerType, ProvenanceMsg,
-    ProvenanceQuerier,
+    activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
+    ProvenanceMsg, ProvenanceQuerier,
 };
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -33,7 +33,7 @@ pub fn instantiate(
         gp: info.sender,
         admin: msg.admin,
         qualified_tags: msg.qualified_tags,
-        asset_denom: format!("investment_{}", env.contract.address),
+        asset_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
         min_commitment: msg.min_commitment,
@@ -45,7 +45,11 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    let create = create_marker(msg.target as u128, state.asset_denom.clone(), MarkerType::Restricted)?;
+    let create = create_marker(
+        msg.target as u128,
+        state.asset_denom.clone(),
+        MarkerType::Restricted,
+    )?;
     let grant = grant_marker_access(
         state.asset_denom.clone(),
         env.contract.address,
@@ -56,11 +60,12 @@ pub fn instantiate(
             MarkerAccess::Withdraw,
         ],
     )?;
+    let finalize = finalize_marker(state.asset_denom.clone())?;
     let activate = activate_marker(state.asset_denom)?;
 
     Ok(Response {
         submessages: vec![],
-        messages: vec![create, grant, activate],
+        messages: vec![create, grant, finalize, activate],
         attributes: vec![],
         data: Option::None,
     })
@@ -513,7 +518,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(3, res.messages.len());
+        assert_eq!(4, res.messages.len());
 
         // verify raise is in active status
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
@@ -524,7 +529,7 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetTerms {}).unwrap();
         let terms: Terms = from_binary(&res).unwrap();
         assert_eq!(0, terms.qualified_tags.len());
-        assert_eq!("fund_coin", terms.asset_denom);
+        assert_eq!("cosmos2contract.investment", terms.asset_denom);
         assert_eq!("stable_coin", terms.capital_denom);
         assert_eq!(5_000_000, terms.target);
         assert_eq!(10_000, terms.min_commitment.unwrap());
