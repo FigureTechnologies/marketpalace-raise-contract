@@ -48,7 +48,7 @@ pub fn instantiate(
     let create = create_marker(
         msg.target as u128,
         state.asset_denom.clone(),
-        MarkerType::Restricted,
+        MarkerType::Coin,
     )?;
     let grant = grant_marker_access(
         state.asset_denom.clone(),
