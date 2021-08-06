@@ -1,3 +1,4 @@
+use crate::msg::Call;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -20,8 +21,7 @@ pub struct State {
     pub max_commitment: Option<u64>,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
-    pub issued_calls: HashSet<Addr>,
-    pub closed_calls: HashSet<Addr>,
+    pub issued_calls: HashSet<Call>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

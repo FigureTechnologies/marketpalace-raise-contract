@@ -6,9 +6,16 @@ use cosmwasm_std::Addr;
 #[serde(rename_all = "snake_case")]
 pub enum SubExecuteMsg {
     Accept {},
-    IssueCapitalCall { capital_call: Addr },
+    IssueCapitalCall { capital_call: SubCapitalCall },
+    CloseCapitalCall {},
     IssueRedemption { redemption: u64 },
     IssueDistribution {},
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SubCapitalCall {
+    pub amount: u64,
+    pub days_of_notice: Option<u16>,
 }
 
 #[derive(Deserialize, Serialize)]

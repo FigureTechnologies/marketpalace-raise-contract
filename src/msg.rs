@@ -28,7 +28,7 @@ pub enum HandleMsg {
         subscriptions: HashMap<Addr, u64>,
     },
     IssueCalls {
-        calls: HashSet<Addr>,
+        calls: HashSet<Call>,
     },
     CloseCalls {
         calls: Vec<Addr>,
@@ -44,6 +44,28 @@ pub enum HandleMsg {
         amount: u64,
         memo: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+pub struct Call {
+    pub subscription: Addr,
+    pub amount: u64,
+    pub days_of_notice: Option<u16>,
+}
+
+impl PartialEq for Call {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
+}
+
+impl Hash for Call {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state);
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
@@ -95,6 +117,5 @@ pub struct Subs {
 
 #[derive(Deserialize, Serialize)]
 pub struct Calls {
-    pub issued: HashSet<Addr>,
-    pub closed: HashSet<Addr>,
+    pub issued: HashSet<Call>,
 }

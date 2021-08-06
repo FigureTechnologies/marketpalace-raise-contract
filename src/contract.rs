@@ -1,3 +1,5 @@
+use crate::msg::Call;
+use crate::sub::SubCapitalCall;
 use cosmwasm_std::{
     coin, coins, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, CosmosMsg,
     Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
@@ -9,7 +11,6 @@ use provwasm_std::{
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::call::{CallMsg, CallQueryMsg, CallTerms};
 use crate::error::ContractError;
 use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
 use crate::state::{config, config_read, State, Status};
@@ -41,7 +42,6 @@ pub fn instantiate(
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
         issued_calls: HashSet::new(),
-        closed_calls: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
 
@@ -247,7 +247,7 @@ pub fn try_accept_subscriptions(
 pub fn try_issue_calls(
     deps: DepsMut,
     info: MessageInfo,
-    calls: HashSet<Addr>,
+    calls: HashSet<Call>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -263,15 +263,15 @@ pub fn try_issue_calls(
     let calls = calls
         .into_iter()
         .map(|call| {
-            let terms: CallTerms = deps
-                .querier
-                .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
-                .expect("terms");
-
             CosmosMsg::Wasm(
                 wasm_execute(
-                    terms.subscription,
-                    &SubExecuteMsg::IssueCapitalCall { capital_call: call },
+                    call.subscription,
+                    &SubExecuteMsg::IssueCapitalCall {
+                        capital_call: SubCapitalCall {
+                            amount: call.amount,
+                            days_of_notice: call.days_of_notice,
+                        },
+                    },
                     vec![],
                 )
                 .unwrap(),
@@ -298,30 +298,30 @@ pub fn try_close_calls(
         return Err(contract_error("only gp can close calls"));
     }
 
+    let calls_to_close: Vec<Call> = state
+        .issued_calls
+        .into_iter()
+        .filter(|call| calls.contains(&call.subscription))
+        .collect();
+
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        calls.iter().for_each(|call| {
+        calls_to_close.iter().for_each(|call| {
             state.issued_calls.remove(call);
-            state.closed_calls.insert(call.clone());
         });
 
         Ok(state)
     })?;
 
-    let close_messages = calls
+    let close_messages = calls_to_close
         .into_iter()
         .map(|call| {
-            let terms: CallTerms = deps
-                .querier
-                .query_wasm_smart(call.clone(), &CallQueryMsg::GetTerms {})
-                .expect("terms");
-
             CosmosMsg::Wasm(
                 wasm_execute(
-                    call,
-                    &CallMsg::Close {},
+                    call.subscription.clone(),
+                    &SubExecuteMsg::CloseCapitalCall {},
                     coins(
-                        terms.amount as u128,
-                        format!("commitment_{}_{}", terms.subscription, terms.raise),
+                        call.amount as u128,
+                        format!("{}.commitment", call.subscription),
                     ),
                 )
                 .unwrap(),
@@ -485,7 +485,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         }),
         QueryMsg::GetCalls {} => to_binary(&Calls {
             issued: state.issued_calls,
-            closed: state.closed_calls,
         }),
     }
 }
@@ -554,7 +553,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -587,7 +585,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -635,7 +632,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -674,7 +670,6 @@ mod tests {
                 pending_review_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -701,20 +696,7 @@ mod tests {
 
     #[test]
     fn issue_calls() {
-        let mut deps =
-            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
-                "call_1" => SystemResult::Ok(ContractResult::Ok(
-                    to_binary(&CallTerms {
-                        subscription: Addr::unchecked("sub_1"),
-                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        amount: 10_0000,
-                    })
-                    .unwrap(),
-                )),
-                _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: String::from("not mocked"),
-                }),
-            });
+        let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
             .save(&State {
@@ -730,7 +712,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -740,7 +721,13 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueCalls {
-                calls: vec![(Addr::unchecked("call_1"))].into_iter().collect(),
+                calls: vec![Call {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    days_of_notice: None,
+                }]
+                .into_iter()
+                .collect(),
             },
         )
         .unwrap();
@@ -754,20 +741,7 @@ mod tests {
 
     #[test]
     fn close_calls() {
-        let mut deps =
-            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
-                "call_1" => SystemResult::Ok(ContractResult::Ok(
-                    to_binary(&CallTerms {
-                        subscription: Addr::unchecked("sub_1"),
-                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        amount: 10_0000,
-                    })
-                    .unwrap(),
-                )),
-                _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: String::from("not mocked"),
-                }),
-            });
+        let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
             .save(&State {
@@ -782,8 +756,13 @@ mod tests {
                 max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
+                issued_calls: vec![Call {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    days_of_notice: None,
+                }]
+                .into_iter()
+                .collect(),
             })
             .unwrap();
 
@@ -793,7 +772,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseCalls {
-                calls: vec![(Addr::unchecked("call_1"))].into_iter().collect(),
+                calls: vec![(Addr::unchecked("sub_1"))].into_iter().collect(),
             },
         )
         .unwrap();
@@ -803,7 +782,6 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
         let calls: Calls = from_binary(&res).unwrap();
         assert_eq!(0, calls.issued.len());
-        assert_eq!(1, calls.closed.len());
     }
 
     #[test]
@@ -824,7 +802,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 
@@ -860,7 +837,6 @@ mod tests {
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
                 issued_calls: HashSet::new(),
-                closed_calls: HashSet::new(),
             })
             .unwrap();
 

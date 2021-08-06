@@ -4,7 +4,6 @@
   "type": "object",
   "required": [
     "admin",
-    "asset_denom",
     "capital_denom",
     "qualified_tags",
     "target"
@@ -12,9 +11,6 @@
   "properties": {
     "admin": {
       "$ref": "#/definitions/Addr"
-    },
-    "asset_denom": {
-      "type": "string"
     },
     "capital_denom": {
       "type": "string"
