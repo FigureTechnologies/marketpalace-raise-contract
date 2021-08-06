@@ -31,11 +31,27 @@
         "propose_subscription": {
           "type": "object",
           "required": [
-            "subscription"
+            "max_commitment",
+            "min_commitment"
           ],
           "properties": {
-            "subscription": {
-              "$ref": "#/definitions/Addr"
+            "max_commitment": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "min_commitment": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "min_days_of_notice": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
             }
           }
         }

@@ -22,7 +22,9 @@ pub enum HandleMsg {
         gp: Addr,
     },
     ProposeSubscription {
-        subscription: Addr,
+        min_commitment: u64,
+        max_commitment: u64,
+        min_days_of_notice: Option<u16>,
     },
     AcceptSubscriptions {
         subscriptions: HashMap<Addr, u64>,

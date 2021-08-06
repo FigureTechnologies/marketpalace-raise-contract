@@ -1,8 +1,7 @@
-use crate::msg::Call;
-use crate::sub::SubCapitalCall;
 use cosmwasm_std::{
-    coin, coins, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    coin, coins, entry_point, to_binary, wasm_execute, wasm_instantiate, Addr, Attribute, BankMsg,
+    Binary, ContractResult, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, ReplyOn,
+    Response, StdError, StdResult, SubMsg,
 };
 use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
@@ -12,9 +11,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
-use crate::msg::{Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
+use crate::msg::{Call, Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
 use crate::state::{config, config_read, State, Status};
-use crate::sub::{SubExecuteMsg, SubQueryMsg, SubTerms};
+use crate::sub::{SubCapitalCall, SubExecuteMsg, SubInstantiateMsg};
 
 fn contract_error(err: &str) -> ContractError {
     ContractError::Std(StdError::generic_err(err))
@@ -71,19 +70,56 @@ pub fn instantiate(
     })
 }
 
+#[entry_point]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    // look for a contract address from instantiating subscription contract
+    if let ContractResult::Ok(response) = msg.result {
+        if let Some(contract_address) = contract_address(&response.events) {
+            config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+                state.pending_review_subs.insert(contract_address);
+                Ok(state)
+            })?;
+        } else {
+            return Err(contract_error("no contract address found"));
+        }
+    } else {
+        return Err(contract_error("subscription contract instantiation failed"));
+    }
+
+    Ok(Response::default())
+}
+
+fn contract_address(events: &[Event]) -> Option<Addr> {
+    events.first().and_then(|event| {
+        event
+            .attributes
+            .iter()
+            .find(|attr| attr.key == "contract_address")
+            .map(|attr| Addr::unchecked(attr.value.clone()))
+    })
+}
+
 // And declare a custom Error variant for the ones where you will want to make use of it
 #[entry_point]
 pub fn execute(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     msg: HandleMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     match msg {
         HandleMsg::Recover { gp } => try_recover(deps, info, gp),
-        HandleMsg::ProposeSubscription { subscription } => {
-            try_propose_subscription(deps, env, info, subscription)
-        }
+        HandleMsg::ProposeSubscription {
+            min_commitment,
+            max_commitment,
+            min_days_of_notice,
+        } => try_propose_subscription(
+            deps,
+            info,
+            min_commitment,
+            max_commitment,
+            min_days_of_notice,
+        ),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, info, subscriptions)
         }
@@ -127,9 +163,10 @@ pub fn try_recover(
 
 pub fn try_propose_subscription(
     deps: DepsMut,
-    env: Env,
     info: MessageInfo,
-    subscription: Addr,
+    min_commitment: u64,
+    max_commitment: u64,
+    min_days_of_notice: Option<u16>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -137,31 +174,8 @@ pub fn try_propose_subscription(
         return Err(contract_error("contract is not active"));
     }
 
-    let terms: SubTerms = deps
-        .querier
-        .query_wasm_smart(subscription.clone(), &SubQueryMsg::GetTerms {})
-        .expect("terms");
-
-    if terms.owner != info.sender {
-        return Err(contract_error(
-            "only owner of subscription can make proposal",
-        ));
-    }
-
-    if terms.raise != env.contract.address {
-        return Err(contract_error(
-            "incorrect raise contract address specified on subscription",
-        ));
-    }
-
-    if terms.capital_denom != state.capital_denom {
-        return Err(contract_error(
-            "both sub and raise need to have the same capital denom",
-        ));
-    }
-
     if let Some(min) = state.min_commitment {
-        if terms.max_commitment < min {
+        if max_commitment < min {
             return Err(contract_error(
                 "capital promise max commitment is below raise minumum commitment",
             ));
@@ -169,7 +183,7 @@ pub fn try_propose_subscription(
     }
 
     if let Some(max) = state.max_commitment {
-        if terms.min_commitment > max {
+        if min_commitment > max {
             return Err(contract_error(
                 "capital promise min commitment exceeds raise maximum commitment",
             ));
@@ -178,7 +192,7 @@ pub fn try_propose_subscription(
 
     if !state.qualified_tags.is_empty() {
         let attributes = ProvenanceQuerier::new(&deps.querier)
-            .get_attributes(terms.owner, None as Option<String>)?
+            .get_attributes(info.sender.clone(), None as Option<String>)?
             .attributes;
 
         if !attributes
@@ -191,13 +205,28 @@ pub fn try_propose_subscription(
         }
     }
 
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.pending_review_subs.insert(subscription.clone());
-        Ok(state)
-    })?;
-
     Ok(Response {
-        submessages: vec![],
+        submessages: vec![SubMsg {
+            id: 1,
+            msg: CosmosMsg::Wasm(
+                wasm_instantiate(
+                    0,
+                    &SubInstantiateMsg {
+                        lp: info.sender,
+                        admin: state.admin,
+                        capital_denom: state.capital_denom,
+                        min_commitment,
+                        max_commitment,
+                        min_days_of_notice,
+                    },
+                    vec![],
+                    String::from("establish subscription"),
+                )
+                .unwrap(),
+            ),
+            gas_limit: None,
+            reply_on: ReplyOn::Always,
+        }],
         messages: vec![],
         attributes: vec![],
         data: Option::None,
@@ -493,9 +522,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use crate::mock::wasm_smart_mock_dependencies;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{from_binary, Addr, ContractResult, SystemError, SystemResult};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{from_binary, Addr};
 
     #[test]
     fn initialization() {
@@ -601,22 +629,7 @@ mod tests {
 
     #[test]
     fn propose_subscription() {
-        let mut deps =
-            wasm_smart_mock_dependencies(&vec![], |contract_addr, _msg| match &contract_addr[..] {
-                "sub_1" => SystemResult::Ok(ContractResult::Ok(
-                    to_binary(&SubTerms {
-                        owner: Addr::unchecked("lp"),
-                        raise: Addr::unchecked(MOCK_CONTRACT_ADDR),
-                        capital_denom: String::from("stable_coin"),
-                        min_commitment: 10_000,
-                        max_commitment: 50_000,
-                    })
-                    .unwrap(),
-                )),
-                _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: String::from("not mocked"),
-                }),
-            });
+        let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
             .save(&State {
@@ -636,20 +649,18 @@ mod tests {
             .unwrap();
 
         // propose a sub as lp
-        execute(
+        let res = execute(
             deps.as_mut(),
             mock_env(),
             mock_info("lp", &[]),
             HandleMsg::ProposeSubscription {
-                subscription: Addr::unchecked("sub_1"),
+                min_commitment: 10_000,
+                max_commitment: 100_000,
+                min_days_of_notice: None,
             },
         )
         .unwrap();
-
-        // assert that the sub is store in pending review
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
-        let subs: Subs = from_binary(&res).unwrap();
-        assert_eq!(1, subs.pending_review.len());
+        assert_eq!(1, res.submessages.len());
     }
 
     #[test]
