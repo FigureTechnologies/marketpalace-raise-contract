@@ -8,7 +8,8 @@ use cosmwasm_std::Addr;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub admin: Addr,
-    pub qualified_tags: Vec<String>,
+    pub acceptable_accreditations: HashSet<String>,
+    pub other_required_tags: HashSet<String>,
     pub capital_denom: String,
     pub target: u64,
     pub min_commitment: Option<u64>,
@@ -103,7 +104,8 @@ pub enum QueryMsg {
 
 #[derive(Deserialize, Serialize)]
 pub struct Terms {
-    pub qualified_tags: Vec<String>,
+    pub acceptable_accreditations: HashSet<String>,
+    pub other_required_tags: HashSet<String>,
     pub asset_denom: String,
     pub capital_denom: String,
     pub target: u64,

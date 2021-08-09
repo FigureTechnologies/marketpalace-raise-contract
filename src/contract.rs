@@ -32,7 +32,8 @@ pub fn instantiate(
         status: Status::Active,
         gp: info.sender,
         admin: msg.admin,
-        qualified_tags: msg.qualified_tags,
+        acceptable_accreditations: msg.acceptable_accreditations,
+        other_required_tags: msg.other_required_tags,
         asset_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
@@ -177,7 +178,7 @@ pub fn try_propose_subscription(
     if let Some(min) = state.min_commitment {
         if max_commitment < min {
             return Err(contract_error(
-                "capital promise max commitment is below raise minumum commitment",
+                "subscription max commitment is below raise minumum commitment",
             ));
         }
     }
@@ -185,24 +186,37 @@ pub fn try_propose_subscription(
     if let Some(max) = state.max_commitment {
         if min_commitment > max {
             return Err(contract_error(
-                "capital promise min commitment exceeds raise maximum commitment",
+                "subscription min commitment exceeds raise maximum commitment",
             ));
         }
     }
 
-    if !state.qualified_tags.is_empty() {
-        let attributes = ProvenanceQuerier::new(&deps.querier)
-            .get_attributes(info.sender.clone(), None as Option<String>)?
-            .attributes;
+    let attributes: HashSet<String> = ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(info.sender.clone(), None as Option<String>)?
+        .attributes
+        .into_iter()
+        .map(|attribute| attribute.name)
+        .collect();
 
-        if !attributes
-            .iter()
-            .any(|attribute| state.qualified_tags.contains(&attribute.name))
-        {
-            return Err(contract_error(
-                "subscription owner must have one of qualified tages",
-            ));
-        }
+    if state.acceptable_accreditations.len() > 0
+        && attributes
+            .intersection(&state.acceptable_accreditations)
+            .count()
+            == 0
+    {
+        return Err(contract_error(&format!(
+            "subscription owner must have one of acceptable accreditations: {:?}",
+            state.acceptable_accreditations
+        )));
+    }
+
+    if attributes.intersection(&state.other_required_tags).count()
+        != state.other_required_tags.len()
+    {
+        return Err(contract_error(&format!(
+            "subscription owner must have all other required tags: {:?}",
+            state.other_required_tags
+        )));
     }
 
     Ok(Response {
@@ -501,7 +515,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetStatus {} => to_binary(&state.status),
         QueryMsg::GetTerms {} => to_binary(&Terms {
-            qualified_tags: state.qualified_tags,
+            acceptable_accreditations: state.acceptable_accreditations,
+            other_required_tags: state.other_required_tags,
             asset_denom: state.asset_denom,
             capital_denom: state.capital_denom,
             target: state.target,
@@ -522,8 +537,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{from_binary, Addr};
+    use provwasm_mocks::mock_dependencies;
 
     #[test]
     fn initialization() {
@@ -537,7 +553,8 @@ mod tests {
             info,
             InstantiateMsg {
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
                 min_commitment: Some(10_000),
@@ -555,7 +572,8 @@ mod tests {
         // verify that terms of raise are correct
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetTerms {}).unwrap();
         let terms: Terms = from_binary(&res).unwrap();
-        assert_eq!(0, terms.qualified_tags.len());
+        assert_eq!(0, terms.acceptable_accreditations.len());
+        assert_eq!(0, terms.other_required_tags.len());
         assert_eq!("cosmos2contract.investment", terms.asset_denom);
         assert_eq!("stable_coin", terms.capital_denom);
         assert_eq!(5_000_000, terms.target);
@@ -572,7 +590,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -604,7 +623,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -636,7 +656,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -672,7 +693,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("raise_1"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -714,7 +736,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -759,7 +782,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -804,7 +828,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
@@ -839,7 +864,8 @@ mod tests {
                 status: Status::Active,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
-                qualified_tags: vec![],
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
                 asset_denom: String::from("fund_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
