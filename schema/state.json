@@ -3,18 +3,26 @@
   "title": "State",
   "type": "object",
   "required": [
+    "acceptable_accreditations",
     "accepted_subs",
     "admin",
     "asset_denom",
     "capital_denom",
     "gp",
     "issued_calls",
+    "other_required_tags",
     "pending_review_subs",
-    "qualified_tags",
     "status",
     "target"
   ],
   "properties": {
+    "acceptable_accreditations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "accepted_subs": {
       "type": "array",
       "items": {
@@ -57,18 +65,19 @@
       "format": "uint64",
       "minimum": 0.0
     },
+    "other_required_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "pending_review_subs": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/Addr"
       },
       "uniqueItems": true
-    },
-    "qualified_tags": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
     },
     "status": {
       "$ref": "#/definitions/Status"

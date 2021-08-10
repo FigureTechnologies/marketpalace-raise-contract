@@ -3,12 +3,20 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
+    "acceptable_accreditations",
     "admin",
     "capital_denom",
-    "qualified_tags",
+    "other_required_tags",
     "target"
   ],
   "properties": {
+    "acceptable_accreditations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "admin": {
       "$ref": "#/definitions/Addr"
     },
@@ -31,11 +39,12 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "qualified_tags": {
+    "other_required_tags": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "uniqueItems": true
     },
     "target": {
       "type": "integer",

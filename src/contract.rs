@@ -198,7 +198,7 @@ pub fn try_propose_subscription(
         .map(|attribute| attribute.name)
         .collect();
 
-    if state.acceptable_accreditations.len() > 0
+    if !state.acceptable_accreditations.is_empty()
         && attributes
             .intersection(&state.acceptable_accreditations)
             .count()
