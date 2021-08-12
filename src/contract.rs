@@ -30,6 +30,7 @@ pub fn instantiate(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = State {
         status: Status::Active,
+        subscription_code_id: msg.subscription_code_id,
         gp: info.sender,
         admin: msg.admin,
         acceptable_accreditations: msg.acceptable_accreditations,
@@ -224,7 +225,7 @@ pub fn try_propose_subscription(
             id: 1,
             msg: CosmosMsg::Wasm(
                 wasm_instantiate(
-                    0,
+                    state.subscription_code_id,
                     &SubInstantiateMsg {
                         lp: info.sender,
                         admin: state.admin,
@@ -552,6 +553,7 @@ mod tests {
             mock_env(),
             info,
             InstantiateMsg {
+                subscription_code_id: 0,
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
@@ -588,6 +590,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -621,6 +624,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -654,6 +658,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -691,6 +696,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -734,6 +740,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -780,6 +787,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -826,6 +834,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
@@ -862,6 +871,7 @@ mod tests {
         config(&mut deps.storage)
             .save(&State {
                 status: Status::Active,
+                subscription_code_id: 0,
                 gp: Addr::unchecked("gp"),
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),

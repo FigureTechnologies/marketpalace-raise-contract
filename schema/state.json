@@ -13,6 +13,7 @@
     "other_required_tags",
     "pending_review_subs",
     "status",
+    "subscription_code_id",
     "target"
   ],
   "properties": {
@@ -81,6 +82,11 @@
     },
     "status": {
       "$ref": "#/definitions/Status"
+    },
+    "subscription_code_id": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "target": {
       "type": "integer",
