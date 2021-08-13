@@ -42,7 +42,7 @@ pub fn instantiate(
                 id: 100,
                 msg,
                 gas_limit: None,
-                reply_on: ReplyOn::Always,
+                reply_on: ReplyOn::Success,
             })
             .collect(),
         messages: vec![],
