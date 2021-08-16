@@ -4,8 +4,8 @@ use cosmwasm_std::{
     Response, StdError, StdResult, SubMsg,
 };
 use provwasm_std::{
-    activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
-    ProvenanceMsg, ProvenanceQuerier,
+    activate_marker, create_marker, finalize_marker, grant_marker_access, withdraw_coins,
+    MarkerAccess, MarkerType, ProvenanceMsg, ProvenanceQuerier,
 };
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -107,7 +107,7 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
 #[entry_point]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: HandleMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -125,7 +125,7 @@ pub fn execute(
             min_days_of_notice,
         ),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
-            try_accept_subscriptions(deps, info, subscriptions)
+            try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCalls { calls } => try_issue_calls(deps, info, calls),
         HandleMsg::CloseCalls { calls } => try_close_calls(deps, info, calls),
@@ -252,6 +252,7 @@ pub fn try_propose_subscription(
 
 pub fn try_accept_subscriptions(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     subscriptions: HashSet<AcceptSubscription>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -274,15 +275,24 @@ pub fn try_accept_subscriptions(
         submessages: vec![],
         messages: subscriptions
             .into_iter()
-            .map(|accept| {
-                CosmosMsg::Wasm(
-                    wasm_execute(
-                        accept.subscription,
-                        &SubExecuteMsg::Accept {},
-                        coins(accept.commitment as u128, state.asset_denom.clone()),
+            .flat_map(|accept| {
+                vec![
+                    withdraw_coins(
+                        state.asset_denom.clone(),
+                        accept.commitment as u128,
+                        state.asset_denom.clone(),
+                        env.contract.address.clone(),
                     )
                     .unwrap(),
-                )
+                    CosmosMsg::Wasm(
+                        wasm_execute(
+                            accept.subscription,
+                            &SubExecuteMsg::Accept {},
+                            coins(accept.commitment as u128, state.asset_denom.clone()),
+                        )
+                        .unwrap(),
+                    ),
+                ]
             })
             .collect(),
         attributes: vec![],
@@ -729,7 +739,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(1, res.messages.len());
+        assert_eq!(2, res.messages.len());
 
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
