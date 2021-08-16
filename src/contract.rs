@@ -2,10 +2,7 @@ use cosmwasm_std::{
     entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, ReplyOn, Response,
     StdResult, SubMsg,
 };
-use provwasm_std::{
-    activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
-    ProvenanceMsg,
-};
+use provwasm_std::{create_marker, MarkerType, ProvenanceMsg};
 
 use crate::error::ContractError;
 use crate::msg::{InstantiateMsg, QueryMsg};
@@ -21,22 +18,10 @@ pub fn instantiate(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let denom = format!("{}.test", env.contract.address);
 
-    let create = create_marker(1_000_000, denom.clone(), MarkerType::Coin)?;
-    let grant = grant_marker_access(
-        denom.clone(),
-        env.contract.address,
-        vec![
-            MarkerAccess::Admin,
-            MarkerAccess::Mint,
-            MarkerAccess::Burn,
-            MarkerAccess::Withdraw,
-        ],
-    )?;
-    let finalize = finalize_marker(denom.clone())?;
-    let activate = activate_marker(denom)?;
+    let create = create_marker(1_000_000, denom, MarkerType::Coin)?;
 
     Ok(Response {
-        submessages: vec![create, grant, finalize, activate]
+        submessages: vec![create]
             .into_iter()
             .map(|msg| SubMsg {
                 id: 100,
