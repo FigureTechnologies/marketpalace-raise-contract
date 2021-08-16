@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
-use crate::msg::{Call, Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms};
+use crate::msg::{
+    AcceptSubscription, Call, Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms,
+};
 use crate::state::{config, config_read, State, Status};
 use crate::sub::{SubCapitalCall, SubExecuteMsg, SubInstantiateMsg};
 
@@ -251,7 +253,7 @@ pub fn try_propose_subscription(
 pub fn try_accept_subscriptions(
     deps: DepsMut,
     info: MessageInfo,
-    subscriptions: HashMap<Addr, u64>,
+    subscriptions: HashSet<AcceptSubscription>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -260,9 +262,9 @@ pub fn try_accept_subscriptions(
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        subscriptions.iter().for_each(|(sub, _)| {
-            state.pending_review_subs.remove(sub);
-            state.accepted_subs.insert(sub.clone());
+        subscriptions.iter().for_each(|accept| {
+            state.pending_review_subs.remove(&accept.subscription);
+            state.accepted_subs.insert(accept.subscription.clone());
         });
 
         Ok(state)
@@ -272,12 +274,12 @@ pub fn try_accept_subscriptions(
         submessages: vec![],
         messages: subscriptions
             .into_iter()
-            .map(|(subscription, commitment)| {
+            .map(|accept| {
                 CosmosMsg::Wasm(
                     wasm_execute(
-                        subscription,
+                        accept.subscription,
                         &SubExecuteMsg::Accept {},
-                        coins(commitment as u128, state.asset_denom.clone()),
+                        coins(accept.commitment as u128, state.asset_denom.clone()),
                     )
                     .unwrap(),
                 )
@@ -718,9 +720,12 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::AcceptSubscriptions {
-                subscriptions: vec![(Addr::unchecked("sub_1"), 20_000 as u64)]
-                    .into_iter()
-                    .collect(),
+                subscriptions: vec![AcceptSubscription {
+                    subscription: Addr::unchecked("sub_1"),
+                    commitment: 20_000,
+                }]
+                .into_iter()
+                .collect(),
             },
         )
         .unwrap();

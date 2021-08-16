@@ -29,7 +29,7 @@ pub enum HandleMsg {
         min_days_of_notice: Option<u16>,
     },
     AcceptSubscriptions {
-        subscriptions: HashMap<Addr, u64>,
+        subscriptions: HashSet<AcceptSubscription>,
     },
     IssueCalls {
         calls: HashSet<Call>,
@@ -48,6 +48,27 @@ pub enum HandleMsg {
         amount: u64,
         memo: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+pub struct AcceptSubscription {
+    pub subscription: Addr,
+    pub commitment: u64,
+}
+
+impl PartialEq for AcceptSubscription {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
+}
+
+impl Hash for AcceptSubscription {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state);
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
