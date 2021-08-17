@@ -1,8 +1,7 @@
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, ReplyOn, Response,
-    StdResult, SubMsg,
+    entry_point, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Reply,
+    ReplyOn, Response, StdResult, SubMsg,
 };
-use provwasm_std::{create_marker, MarkerType, ProvenanceMsg};
 
 use crate::error::ContractError;
 use crate::msg::{InstantiateMsg, QueryMsg};
@@ -11,13 +10,17 @@ use crate::msg::{InstantiateMsg, QueryMsg};
 pub fn instantiate(
     _deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
-    _msg: InstantiateMsg,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+    info: MessageInfo,
+    msg: InstantiateMsg,
+) -> Result<Response<CosmosMsg>, ContractError> {
     Ok(Response {
         submessages: vec![SubMsg {
             id: 100,
-            msg: create_marker(1_000_000, String::from("test"), MarkerType::Coin)?,
+            msg: BankMsg::Send {
+                to_address: msg.to,
+                amount: info.funds,
+            }
+            .into(),
             gas_limit: None,
             reply_on: ReplyOn::Success,
         }],
