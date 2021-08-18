@@ -85,10 +85,10 @@
     {
       "type": "object",
       "required": [
-        "issue_calls"
+        "issue_capital_calls"
       ],
       "properties": {
-        "issue_calls": {
+        "issue_capital_calls": {
           "type": "object",
           "required": [
             "calls"
@@ -109,10 +109,10 @@
     {
       "type": "object",
       "required": [
-        "close_calls"
+        "close_capital_calls"
       ],
       "properties": {
-        "close_calls": {
+        "close_capital_calls": {
           "type": "object",
           "required": [
             "calls"

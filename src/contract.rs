@@ -127,8 +127,8 @@ pub fn execute(
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
-        HandleMsg::IssueCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCalls { calls } => try_close_calls(deps, info, calls),
+        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
+        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, info, calls),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
@@ -776,7 +776,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
-            HandleMsg::IssueCalls {
+            HandleMsg::IssueCapitalCalls {
                 calls: vec![Call {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
@@ -829,7 +829,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
-            HandleMsg::CloseCalls {
+            HandleMsg::CloseCapitalCalls {
                 calls: vec![(Addr::unchecked("sub_1"))].into_iter().collect(),
             },
         )

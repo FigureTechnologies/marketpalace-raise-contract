@@ -31,10 +31,10 @@ pub enum HandleMsg {
     AcceptSubscriptions {
         subscriptions: HashSet<AcceptSubscription>,
     },
-    IssueCalls {
+    IssueCapitalCalls {
         calls: HashSet<Call>,
     },
-    CloseCalls {
+    CloseCapitalCalls {
         calls: Vec<Addr>,
     },
     IssueRedemptions {
