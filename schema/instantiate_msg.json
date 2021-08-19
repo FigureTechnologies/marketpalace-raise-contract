@@ -3,11 +3,13 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "to"
+    "depth"
   ],
   "properties": {
-    "to": {
-      "type": "string"
+    "depth": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     }
   }
 }

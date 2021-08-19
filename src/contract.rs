@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    entry_point, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Reply,
-    ReplyOn, Response, StdResult, SubMsg,
+    entry_point, to_binary, wasm_instantiate, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    Reply, ReplyOn, Response, StdResult, SubMsg,
 };
 
 use crate::error::ContractError;
@@ -14,16 +14,24 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response<CosmosMsg>, ContractError> {
     Ok(Response {
-        submessages: vec![SubMsg {
-            id: 100,
-            msg: BankMsg::Send {
-                to_address: msg.to,
-                amount: info.funds,
-            }
-            .into(),
-            gas_limit: None,
-            reply_on: ReplyOn::Success,
-        }],
+        submessages: if msg.depth <= 100 {
+            vec![SubMsg {
+                id: 100,
+                msg: wasm_instantiate(
+                    1,
+                    &InstantiateMsg {
+                        depth: msg.depth + 1,
+                    },
+                    info.funds,
+                    format!("{}", msg.depth),
+                )?
+                .into(),
+                gas_limit: None,
+                reply_on: ReplyOn::Success,
+            }]
+        } else {
+            vec![]
+        },
         messages: vec![],
         attributes: vec![],
         data: Option::None,
