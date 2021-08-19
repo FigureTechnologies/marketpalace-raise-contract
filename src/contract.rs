@@ -10,14 +10,18 @@ use crate::msg::{InstantiateMsg, QueryMsg};
 #[entry_point]
 pub fn instantiate(
     _deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     Ok(Response {
         submessages: vec![SubMsg {
             id: 100,
-            msg: create_marker(1_000_000, String::from("test"), MarkerType::Coin)?,
+            msg: create_marker(
+                1_000_000,
+                format!("{}.test", env.contract.address),
+                MarkerType::Coin,
+            )?,
             gas_limit: None,
             reply_on: ReplyOn::Success,
         }],

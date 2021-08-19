@@ -17,7 +17,7 @@
 ### instantiate contract
     provenanced -t tx wasm instantiate 1 '{}' \
       --label test \
-      --from $(address jedi) \
+      --from $(faucet) \
       --home $N0 \
       --chain-id chain-local \
       --gas auto --gas-prices 1905nhash --gas-adjustment 2 \
