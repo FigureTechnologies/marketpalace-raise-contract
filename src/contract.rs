@@ -128,7 +128,9 @@ pub fn execute(
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, info, calls),
+        HandleMsg::CloseCapitalCalls { subscriptions } => {
+            try_close_calls(deps, info, subscriptions)
+        }
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
@@ -346,7 +348,7 @@ pub fn try_issue_calls(
 pub fn try_close_calls(
     deps: DepsMut,
     info: MessageInfo,
-    calls: Vec<Addr>,
+    subscriptions: Vec<Addr>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -357,7 +359,7 @@ pub fn try_close_calls(
     let calls_to_close: Vec<Call> = state
         .issued_calls
         .into_iter()
-        .filter(|call| calls.contains(&call.subscription))
+        .filter(|call| subscriptions.contains(&call.subscription))
         .collect();
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -830,7 +832,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseCapitalCalls {
-                calls: vec![(Addr::unchecked("sub_1"))].into_iter().collect(),
+                subscriptions: vec![(Addr::unchecked("sub_1"))].into_iter().collect(),
             },
         )
         .unwrap();

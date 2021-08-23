@@ -35,7 +35,7 @@ pub enum HandleMsg {
         calls: HashSet<Call>,
     },
     CloseCapitalCalls {
-        calls: Vec<Addr>,
+        subscriptions: Vec<Addr>,
     },
     IssueRedemptions {
         redemptions: HashSet<Redemption>,

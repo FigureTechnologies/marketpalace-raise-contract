@@ -115,10 +115,10 @@
         "close_capital_calls": {
           "type": "object",
           "required": [
-            "calls"
+            "subscriptions"
           ],
           "properties": {
-            "calls": {
+            "subscriptions": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Addr"
