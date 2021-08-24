@@ -406,16 +406,6 @@ pub fn try_issue_redemptions(
         return Err(contract_error("only gp can issue redemptions"));
     }
 
-    let capital = info.funds.first().unwrap();
-    if capital.denom != state.capital_denom {
-        return Err(contract_error("incorrect capital denom"));
-    }
-
-    let total = redemptions.iter().fold(0, |sum, next| sum + next.capital);
-    if capital.amount.u128() as u64 != total {
-        return Err(contract_error("incorrect capital sent for all redemptions"));
-    }
-
     let redemptions = redemptions
         .into_iter()
         .map(|redemption| {
