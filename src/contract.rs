@@ -7,12 +7,12 @@ use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, withdraw_coins,
     MarkerAccess, MarkerType, ProvenanceMsg, ProvenanceQuerier,
 };
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::msg::{
-    AcceptSubscription, Call, Calls, HandleMsg, InstantiateMsg, QueryMsg, Redemption, Subs, Terms,
+    AcceptSubscription, Call, Calls, Distribution, HandleMsg, InstantiateMsg, QueryMsg, Redemption,
+    Subs, Terms,
 };
 use crate::state::{config, config_read, State, Status};
 use crate::sub::{SubCapitalCall, SubExecuteMsg, SubInstantiateMsg};
@@ -436,7 +436,7 @@ pub fn try_issue_redemptions(
 pub fn try_issue_distributions(
     deps: DepsMut,
     info: MessageInfo,
-    distributions: HashMap<Addr, u64>,
+    distributions: HashSet<Distribution>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -449,7 +449,7 @@ pub fn try_issue_distributions(
         return Err(contract_error("incorrect capital denom"));
     }
 
-    let total = distributions.iter().fold(0, |sum, next| sum + next.1);
+    let total = distributions.iter().fold(0, |sum, next| sum + next.amount);
     if capital.amount.u128() as u64 != total {
         return Err(contract_error(
             "incorrect capital sent for all distributions",
@@ -458,12 +458,15 @@ pub fn try_issue_distributions(
 
     let distributions = distributions
         .into_iter()
-        .map(|(subscription, distribution)| {
+        .map(|distribution| {
             CosmosMsg::Wasm(
                 wasm_execute(
-                    subscription,
+                    distribution.subscription,
                     &SubExecuteMsg::IssueDistribution {},
-                    vec![coin(distribution as u128, state.capital_denom.clone())],
+                    vec![coin(
+                        distribution.amount as u128,
+                        state.capital_denom.clone(),
+                    )],
                 )
                 .unwrap(),
             )
@@ -862,9 +865,12 @@ mod tests {
             mock_env(),
             mock_info("gp", &[coin(10_000, "stable_coin")]),
             HandleMsg::IssueDistributions {
-                distributions: vec![(Addr::unchecked("sub_1"), 10_000 as u64)]
-                    .into_iter()
-                    .collect(),
+                distributions: vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
             },
         )
         .unwrap();

@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::hash::Hash;
 
 use cosmwasm_std::Addr;
@@ -41,7 +41,7 @@ pub enum HandleMsg {
         redemptions: HashSet<Redemption>,
     },
     IssueDistributions {
-        distributions: HashMap<Addr, u64>,
+        distributions: HashSet<Distribution>,
     },
     RedeemCapital {
         to: Addr,
@@ -107,6 +107,27 @@ impl PartialEq for Redemption {
 }
 
 impl Hash for Redemption {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state)
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+pub struct Distribution {
+    pub subscription: Addr,
+    pub amount: u64,
+}
+
+impl PartialEq for Distribution {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
+}
+
+impl Hash for Distribution {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,

@@ -166,12 +166,11 @@
           ],
           "properties": {
             "distributions": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              }
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Distribution"
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -251,6 +250,23 @@
             "null"
           ],
           "format": "uint16",
+          "minimum": 0.0
+        },
+        "subscription": {
+          "$ref": "#/definitions/Addr"
+        }
+      }
+    },
+    "Distribution": {
+      "type": "object",
+      "required": [
+        "amount",
+        "subscription"
+      ],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "format": "uint64",
           "minimum": 0.0
         },
         "subscription": {
