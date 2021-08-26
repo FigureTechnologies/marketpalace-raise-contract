@@ -444,18 +444,6 @@ pub fn try_issue_distributions(
         return Err(contract_error("only gp can issue distributions"));
     }
 
-    let capital = info.funds.first().unwrap();
-    if capital.denom != state.capital_denom {
-        return Err(contract_error("incorrect capital denom"));
-    }
-
-    let total = distributions.iter().fold(0, |sum, next| sum + next.amount);
-    if capital.amount.u128() as u64 != total {
-        return Err(contract_error(
-            "incorrect capital sent for all distributions",
-        ));
-    }
-
     let distributions = distributions
         .into_iter()
         .map(|distribution| {
