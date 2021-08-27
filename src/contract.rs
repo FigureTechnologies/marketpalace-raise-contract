@@ -15,7 +15,9 @@ use crate::msg::{
     QueryMsg, Redemption, Subs, Terms,
 };
 use crate::state::{config, config_read, State, Status, Withdrawal};
-use crate::sub::{SubCapitalCall, SubExecuteMsg, SubInstantiateMsg};
+use crate::sub::{
+    SubCapitalCallIssuance, SubExecuteMsg, SubInstantiateMsg, SubQueryMsg, SubTransactions,
+};
 
 fn contract_error(err: &str) -> ContractError {
     ContractError::Std(StdError::generic_err(err))
@@ -319,7 +321,7 @@ pub fn try_issue_calls(
                 wasm_execute(
                     call.subscription,
                     &SubExecuteMsg::IssueCapitalCall {
-                        capital_call: SubCapitalCall {
+                        capital_call: SubCapitalCallIssuance {
                             amount: call.amount,
                             days_of_notice: call.days_of_notice,
                         },
@@ -353,12 +355,19 @@ pub fn try_close_calls(
     let close_messages = calls
         .into_iter()
         .map(|call| {
+            let transactions: SubTransactions = deps
+                .querier
+                .query_wasm_smart(call.subscription.clone(), &SubQueryMsg::GetTransactions {})
+                .unwrap();
+
+            let active_call_amount = transactions.capital_calls.active.unwrap().amount;
+
             CosmosMsg::Wasm(
                 wasm_execute(
                     call.subscription.clone(),
                     &SubExecuteMsg::CloseCapitalCall {},
                     coins(
-                        call.amount as u128,
+                        active_call_amount as u128,
                         format!("{}.commitment", call.subscription),
                     ),
                 )
@@ -531,8 +540,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
+    use crate::mock::wasm_smart_mock_dependencies;
+    use crate::sub::{SubCapitalCall, SubCapitalCalls};
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{from_binary, Addr};
+    use cosmwasm_std::{from_binary, Addr, SystemResult};
     use provwasm_mocks::mock_dependencies;
 
     #[test]
@@ -778,7 +789,25 @@ mod tests {
 
     #[test]
     fn close_calls() {
-        let mut deps = mock_dependencies(&vec![]);
+        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
+            SystemResult::Ok(ContractResult::Ok(
+                to_binary(&SubTransactions {
+                    capital_calls: SubCapitalCalls {
+                        active: Some(SubCapitalCall {
+                            sequence: 1,
+                            amount: 10_000,
+                            days_of_notice: None,
+                        }),
+                        closed: HashSet::new(),
+                        cancelled: HashSet::new(),
+                    },
+                    redemptions: HashSet::new(),
+                    distributions: HashSet::new(),
+                    withdrawals: HashSet::new(),
+                })
+                .unwrap(),
+            ))
+        });
 
         config(&mut deps.storage)
             .save(&State {
@@ -808,7 +837,6 @@ mod tests {
             HandleMsg::CloseCapitalCalls {
                 calls: vec![CallClosure {
                     subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
                 }]
                 .into_iter()
                 .collect(),

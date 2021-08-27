@@ -96,7 +96,6 @@ impl Hash for CallIssuance {
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
 pub struct CallClosure {
     pub subscription: Addr,
-    pub amount: u64,
 }
 
 impl PartialEq for CallClosure {
