@@ -1,7 +1,7 @@
-use crate::msg::Call;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::hash::Hash;
 
 use cosmwasm_std::{Addr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
@@ -21,14 +21,37 @@ pub struct State {
     pub target: u64,
     pub min_commitment: Option<u64>,
     pub max_commitment: Option<u64>,
+    pub sequence: u16,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
-    pub issued_calls: HashSet<Call>,
+    pub issued_withdrawals: HashSet<Withdrawal>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum Status {
     Active,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, JsonSchema)]
+pub struct Withdrawal {
+    pub sequence: u16,
+    pub to: Addr,
+    pub amount: u64,
+}
+
+impl PartialEq for Withdrawal {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
+
+impl Hash for Withdrawal {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.sequence.hash(state);
+    }
 }
 
 pub fn config(storage: &mut dyn Storage) -> Singleton<State> {

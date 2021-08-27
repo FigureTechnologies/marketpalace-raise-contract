@@ -32,10 +32,10 @@ pub enum HandleMsg {
         subscriptions: HashSet<AcceptSubscription>,
     },
     IssueCapitalCalls {
-        calls: HashSet<Call>,
+        calls: HashSet<CallIssuance>,
     },
     CloseCapitalCalls {
-        subscriptions: Vec<Addr>,
+        calls: HashSet<CallClosure>,
     },
     IssueRedemptions {
         redemptions: HashSet<Redemption>,
@@ -43,7 +43,7 @@ pub enum HandleMsg {
     IssueDistributions {
         distributions: HashSet<Distribution>,
     },
-    RedeemCapital {
+    IssueWithdrawal {
         to: Addr,
         amount: u64,
         memo: Option<String>,
@@ -72,19 +72,40 @@ impl Hash for AcceptSubscription {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
-pub struct Call {
+pub struct CallIssuance {
     pub subscription: Addr,
     pub amount: u64,
     pub days_of_notice: Option<u16>,
 }
 
-impl PartialEq for Call {
+impl PartialEq for CallIssuance {
     fn eq(&self, other: &Self) -> bool {
         self.subscription == other.subscription
     }
 }
 
-impl Hash for Call {
+impl Hash for CallIssuance {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state);
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+pub struct CallClosure {
+    pub subscription: Addr,
+    pub amount: u64,
+}
+
+impl PartialEq for CallClosure {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
+}
+
+impl Hash for CallClosure {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,
@@ -142,7 +163,6 @@ pub enum QueryMsg {
     GetStatus {},
     GetTerms {},
     GetSubs {},
-    GetCalls {},
 }
 
 #[derive(Deserialize, Serialize)]
@@ -160,9 +180,4 @@ pub struct Terms {
 pub struct Subs {
     pub pending_review: HashSet<Addr>,
     pub accepted: HashSet<Addr>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Calls {
-    pub issued: HashSet<Call>,
 }

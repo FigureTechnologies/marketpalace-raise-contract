@@ -37,18 +37,6 @@
         }
       },
       "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_calls"
-      ],
-      "properties": {
-        "get_calls": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
     }
   ]
 }

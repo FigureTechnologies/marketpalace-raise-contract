@@ -11,10 +11,10 @@ use std::collections::HashSet;
 
 use crate::error::ContractError;
 use crate::msg::{
-    AcceptSubscription, Call, Calls, Distribution, HandleMsg, InstantiateMsg, QueryMsg, Redemption,
-    Subs, Terms,
+    AcceptSubscription, CallClosure, CallIssuance, Distribution, HandleMsg, InstantiateMsg,
+    QueryMsg, Redemption, Subs, Terms,
 };
-use crate::state::{config, config_read, State, Status};
+use crate::state::{config, config_read, State, Status, Withdrawal};
 use crate::sub::{SubCapitalCall, SubExecuteMsg, SubInstantiateMsg};
 
 fn contract_error(err: &str) -> ContractError {
@@ -42,9 +42,10 @@ pub fn instantiate(
         target: msg.target,
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
+        sequence: 0,
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
-        issued_calls: HashSet::new(),
+        issued_withdrawals: HashSet::new(),
     };
     config(deps.storage).save(&state)?;
 
@@ -128,17 +129,15 @@ pub fn execute(
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls { subscriptions } => {
-            try_close_calls(deps, info, subscriptions)
-        }
+        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, info, calls),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
-        HandleMsg::RedeemCapital { to, amount, memo } => {
-            try_redeem_capital(deps, info, to, amount, memo)
+        HandleMsg::IssueWithdrawal { to, amount, memo } => {
+            try_issue_withdrawal(deps, info, env, to, amount, memo)
         }
     }
 }
@@ -305,18 +304,13 @@ pub fn try_accept_subscriptions(
 pub fn try_issue_calls(
     deps: DepsMut,
     info: MessageInfo,
-    calls: HashSet<Call>,
+    calls: HashSet<CallIssuance>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
         return Err(contract_error("only gp can issue calls"));
     }
-
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.issued_calls = state.issued_calls.union(&calls).cloned().collect();
-        Ok(state)
-    })?;
 
     let calls = calls
         .into_iter()
@@ -348,7 +342,7 @@ pub fn try_issue_calls(
 pub fn try_close_calls(
     deps: DepsMut,
     info: MessageInfo,
-    subscriptions: Vec<Addr>,
+    calls: HashSet<CallClosure>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -356,21 +350,7 @@ pub fn try_close_calls(
         return Err(contract_error("only gp can close calls"));
     }
 
-    let calls_to_close: Vec<Call> = state
-        .issued_calls
-        .into_iter()
-        .filter(|call| subscriptions.contains(&call.subscription))
-        .collect();
-
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        calls_to_close.iter().for_each(|call| {
-            state.issued_calls.remove(call);
-        });
-
-        Ok(state)
-    })?;
-
-    let close_messages = calls_to_close
+    let close_messages = calls
         .into_iter()
         .map(|call| {
             CosmosMsg::Wasm(
@@ -469,9 +449,10 @@ pub fn try_issue_distributions(
     })
 }
 
-pub fn try_redeem_capital(
+pub fn try_issue_withdrawal(
     deps: DepsMut,
     info: MessageInfo,
+    env: Env,
     to: Addr,
     amount: u64,
     memo: Option<String>,
@@ -482,23 +463,43 @@ pub fn try_redeem_capital(
         return Err(contract_error("only gp can redeem capital"));
     }
 
+    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
+        state.sequence += 1;
+        state.issued_withdrawals.insert(Withdrawal {
+            sequence: state.sequence,
+            to: to.clone(),
+            amount,
+        });
+        Ok(state)
+    })?;
+
+    let state = config_read(deps.storage).load()?;
+
     let send = BankMsg::Send {
         to_address: to.to_string(),
         amount: vec![coin(amount as u128, state.capital_denom)],
     }
     .into();
 
+    let sequence_attribute = Attribute {
+        key: format!("{}.withdrawal.sequence", env.contract.address),
+        value: format!("{}", state.sequence),
+    };
+
     Ok(Response {
         submessages: vec![],
         messages: vec![send],
         attributes: match memo {
             Some(memo) => {
-                vec![Attribute {
-                    key: String::from("memo"),
-                    value: memo,
-                }]
+                vec![
+                    Attribute {
+                        key: String::from("memo"),
+                        value: memo,
+                    },
+                    sequence_attribute,
+                ]
             }
-            None => vec![],
+            None => vec![sequence_attribute],
         },
         data: Option::None,
     })
@@ -522,9 +523,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetSubs {} => to_binary(&Subs {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
-        }),
-        QueryMsg::GetCalls {} => to_binary(&Calls {
-            issued: state.issued_calls,
         }),
     }
 }
@@ -595,9 +593,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -629,9 +628,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -663,9 +663,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -701,9 +702,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -748,9 +750,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -760,7 +763,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueCapitalCalls {
-                calls: vec![Call {
+                calls: vec![CallIssuance {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
                     days_of_notice: None,
@@ -771,11 +774,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(1, res.messages.len());
-
-        // assert that the issued call is stored
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
-        let calls: Calls = from_binary(&res).unwrap();
-        assert_eq!(1, calls.issued.len());
     }
 
     #[test]
@@ -795,15 +793,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: vec![Call {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    days_of_notice: None,
-                }]
-                .into_iter()
-                .collect(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -813,16 +806,16 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseCapitalCalls {
-                subscriptions: vec![(Addr::unchecked("sub_1"))].into_iter().collect(),
+                calls: vec![CallClosure {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
             },
         )
         .unwrap();
         assert_eq!(1, res.messages.len());
-
-        // assert that the closed call is stored
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCalls {}).unwrap();
-        let calls: Calls = from_binary(&res).unwrap();
-        assert_eq!(0, calls.issued.len());
     }
 
     #[test]
@@ -842,9 +835,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -882,9 +876,10 @@ mod tests {
                 target: 5_000_000,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
+                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_calls: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
             })
             .unwrap();
 
@@ -892,7 +887,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
-            HandleMsg::RedeemCapital {
+            HandleMsg::IssueWithdrawal {
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
