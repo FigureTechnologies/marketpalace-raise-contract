@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
 
+use crate::state::Withdrawal;
 use cosmwasm_std::Addr;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -162,6 +163,7 @@ pub enum QueryMsg {
     GetStatus {},
     GetTerms {},
     GetSubs {},
+    GetTransactions {},
 }
 
 #[derive(Deserialize, Serialize)]
@@ -179,4 +181,9 @@ pub struct Terms {
 pub struct Subs {
     pub pending_review: HashSet<Addr>,
     pub accepted: HashSet<Addr>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Transactions {
+    pub withdrawals: HashSet<Withdrawal>,
 }

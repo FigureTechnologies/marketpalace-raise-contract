@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use crate::error::ContractError;
 use crate::msg::{
     AcceptSubscription, CallClosure, CallIssuance, Distribution, HandleMsg, InstantiateMsg,
-    QueryMsg, Redemption, Subs, Terms,
+    QueryMsg, Redemption, Subs, Terms, Transactions,
 };
 use crate::state::{config, config_read, State, Status, Withdrawal};
 use crate::sub::{
@@ -532,6 +532,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetSubs {} => to_binary(&Subs {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
+        }),
+        QueryMsg::GetTransactions {} => to_binary(&Transactions {
+            withdrawals: state.issued_withdrawals,
         }),
     }
 }
