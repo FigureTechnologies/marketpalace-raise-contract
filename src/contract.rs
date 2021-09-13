@@ -69,12 +69,7 @@ pub fn instantiate(
     let finalize = finalize_marker(state.asset_denom.clone())?;
     let activate = activate_marker(state.asset_denom)?;
 
-    Ok(Response {
-        submessages: vec![],
-        messages: vec![create, grant, finalize, activate],
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::default().add_messages(vec![create, grant, finalize, activate]))
 }
 
 #[entry_point]
@@ -160,12 +155,7 @@ pub fn try_recover(
         Ok(state)
     })?;
 
-    Ok(Response {
-        submessages: vec![],
-        messages: vec![],
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::default())
 }
 
 pub fn try_propose_subscription(
@@ -225,32 +215,29 @@ pub fn try_propose_subscription(
         )));
     }
 
-    Ok(Response {
-        submessages: vec![SubMsg {
-            id: 1,
-            msg: CosmosMsg::Wasm(
-                wasm_instantiate(
-                    state.subscription_code_id,
-                    &SubInstantiateMsg {
-                        lp: info.sender,
-                        admin: state.admin,
-                        capital_denom: state.capital_denom,
-                        min_commitment,
-                        max_commitment,
-                        min_days_of_notice,
-                    },
-                    vec![],
-                    String::from("establish subscription"),
-                )
-                .unwrap(),
-            ),
-            gas_limit: None,
-            reply_on: ReplyOn::Always,
-        }],
-        messages: vec![],
-        attributes: vec![],
-        data: Option::None,
-    })
+    let create_sub = SubMsg {
+        id: 1,
+        msg: CosmosMsg::Wasm(
+            wasm_instantiate(
+                state.subscription_code_id,
+                &SubInstantiateMsg {
+                    lp: info.sender,
+                    admin: state.admin,
+                    capital_denom: state.capital_denom,
+                    min_commitment,
+                    max_commitment,
+                    min_days_of_notice,
+                },
+                vec![],
+                String::from("establish subscription"),
+            )
+            .unwrap(),
+        ),
+        gas_limit: None,
+        reply_on: ReplyOn::Always,
+    };
+
+    Ok(Response::new().add_submessage(create_sub))
 }
 
 pub fn try_accept_subscriptions(
@@ -274,33 +261,30 @@ pub fn try_accept_subscriptions(
         Ok(state)
     })?;
 
-    Ok(Response {
-        submessages: vec![],
-        messages: subscriptions
-            .into_iter()
-            .flat_map(|accept| {
-                vec![
-                    withdraw_coins(
-                        state.asset_denom.clone(),
-                        accept.commitment as u128,
-                        state.asset_denom.clone(),
-                        env.contract.address.clone(),
+    let withdrawals_and_acceptances: Vec<CosmosMsg<ProvenanceMsg>> = subscriptions
+        .into_iter()
+        .flat_map(|accept| {
+            vec![
+                withdraw_coins(
+                    state.asset_denom.clone(),
+                    accept.commitment as u128,
+                    state.asset_denom.clone(),
+                    env.contract.address.clone(),
+                )
+                .unwrap(),
+                CosmosMsg::Wasm(
+                    wasm_execute(
+                        accept.subscription,
+                        &SubExecuteMsg::Accept {},
+                        coins(accept.commitment as u128, state.asset_denom.clone()),
                     )
                     .unwrap(),
-                    CosmosMsg::Wasm(
-                        wasm_execute(
-                            accept.subscription,
-                            &SubExecuteMsg::Accept {},
-                            coins(accept.commitment as u128, state.asset_denom.clone()),
-                        )
-                        .unwrap(),
-                    ),
-                ]
-            })
-            .collect(),
-        attributes: vec![],
-        data: Option::None,
-    })
+                ),
+            ]
+        })
+        .collect();
+
+    Ok(Response::new().add_messages(withdrawals_and_acceptances))
 }
 
 pub fn try_issue_calls(
@@ -314,7 +298,7 @@ pub fn try_issue_calls(
         return Err(contract_error("only gp can issue calls"));
     }
 
-    let calls = calls
+    let calls: Vec<CosmosMsg<ProvenanceMsg>> = calls
         .into_iter()
         .map(|call| {
             CosmosMsg::Wasm(
@@ -333,12 +317,7 @@ pub fn try_issue_calls(
         })
         .collect();
 
-    Ok(Response {
-        submessages: vec![],
-        messages: calls,
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::new().add_messages(calls))
 }
 
 pub fn try_close_calls(
@@ -352,7 +331,7 @@ pub fn try_close_calls(
         return Err(contract_error("only gp can close calls"));
     }
 
-    let close_messages = calls
+    let close_messages: Vec<CosmosMsg<ProvenanceMsg>> = calls
         .into_iter()
         .map(|call| {
             let transactions: SubTransactions = deps
@@ -376,12 +355,7 @@ pub fn try_close_calls(
         })
         .collect();
 
-    Ok(Response {
-        submessages: vec![],
-        messages: close_messages,
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::new().add_messages(close_messages))
 }
 
 pub fn try_issue_redemptions(
@@ -395,7 +369,7 @@ pub fn try_issue_redemptions(
         return Err(contract_error("only gp can issue redemptions"));
     }
 
-    let redemptions = redemptions
+    let redemptions: Vec<CosmosMsg<ProvenanceMsg>> = redemptions
         .into_iter()
         .map(|redemption| {
             CosmosMsg::Wasm(
@@ -414,12 +388,7 @@ pub fn try_issue_redemptions(
         })
         .collect();
 
-    Ok(Response {
-        submessages: vec![],
-        messages: redemptions,
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::new().add_messages(redemptions))
 }
 
 pub fn try_issue_distributions(
@@ -433,7 +402,7 @@ pub fn try_issue_distributions(
         return Err(contract_error("only gp can issue distributions"));
     }
 
-    let distributions = distributions
+    let distributions: Vec<CosmosMsg<ProvenanceMsg>> = distributions
         .into_iter()
         .map(|distribution| {
             CosmosMsg::Wasm(
@@ -450,12 +419,7 @@ pub fn try_issue_distributions(
         })
         .collect();
 
-    Ok(Response {
-        submessages: vec![],
-        messages: distributions,
-        attributes: vec![],
-        data: Option::None,
-    })
+    Ok(Response::new().add_messages(distributions))
 }
 
 pub fn try_issue_withdrawal(
@@ -487,31 +451,27 @@ pub fn try_issue_withdrawal(
     let send = BankMsg::Send {
         to_address: to.to_string(),
         amount: vec![coin(amount as u128, state.capital_denom)],
-    }
-    .into();
+    };
 
     let sequence_attribute = Attribute {
         key: format!("{}.withdrawal.sequence", env.contract.address),
         value: format!("{}", state.sequence),
     };
 
-    Ok(Response {
-        submessages: vec![],
-        messages: vec![send],
-        attributes: match memo {
-            Some(memo) => {
-                vec![
-                    Attribute {
-                        key: String::from("memo"),
-                        value: memo,
-                    },
-                    sequence_attribute,
-                ]
-            }
-            None => vec![sequence_attribute],
-        },
-        data: Option::None,
-    })
+    let attributes = match memo {
+        Some(memo) => {
+            vec![
+                Attribute {
+                    key: String::from("memo"),
+                    value: memo,
+                },
+                sequence_attribute,
+            ]
+        }
+        None => vec![sequence_attribute],
+    };
+
+    Ok(Response::new().add_message(send).add_attributes(attributes))
 }
 
 #[entry_point]
@@ -696,7 +656,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(1, res.submessages.len());
+        assert_eq!(1, res.messages.len());
     }
 
     #[test]
