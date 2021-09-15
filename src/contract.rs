@@ -96,7 +96,7 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
         event
             .attributes
             .iter()
-            .find(|attr| attr.key == "contract_address")
+            .find(|attr| attr.key == "_contract_address")
             .map(|attr| Addr::unchecked(attr.value.clone()))
     })
 }
