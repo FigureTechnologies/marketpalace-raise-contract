@@ -509,6 +509,28 @@ mod tests {
     use cosmwasm_std::{from_binary, Addr, SystemResult};
     use provwasm_mocks::mock_dependencies;
 
+    impl State {
+        fn test_default() -> State {
+            State {
+                status: Status::Active,
+                subscription_code_id: 0,
+                gp: Addr::unchecked("gp"),
+                admin: Addr::unchecked("marketpalace"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                asset_denom: String::from("fund_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
+                sequence: 0,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
+            }
+        }
+    }
+
     #[test]
     fn initialization() {
         let mut deps = mock_dependencies(&[]);
@@ -555,23 +577,7 @@ mod tests {
         let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         execute(
@@ -583,6 +589,10 @@ mod tests {
             },
         )
         .unwrap();
+
+        // verify that gp has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp_2", state.gp);
     }
 
     #[test]
@@ -590,23 +600,7 @@ mod tests {
         let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         let res = execute(
@@ -618,6 +612,10 @@ mod tests {
             },
         );
         assert_eq!(true, res.is_err());
+
+        // verify that gp has NOT been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp", state.gp);
     }
 
     #[test]
@@ -625,23 +623,7 @@ mod tests {
         let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         // propose a sub as lp
@@ -663,25 +645,10 @@ mod tests {
     fn accept_subscription() {
         let mut deps = mock_dependencies(&[]);
 
-        config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("raise_1"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
-            .unwrap();
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+
+        config(&mut deps.storage).save(&state).unwrap();
 
         // accept pending sub as gp
         let res = execute(
@@ -712,23 +679,7 @@ mod tests {
         let mut deps = mock_dependencies(&vec![]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         // issue calls
@@ -773,23 +724,7 @@ mod tests {
         });
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         // close call
@@ -814,23 +749,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         let res = execute(
@@ -855,23 +774,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
 
         config(&mut deps.storage)
-            .save(&State {
-                status: Status::Active,
-                subscription_code_id: 0,
-                gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-                sequence: 0,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
-            })
+            .save(&State::test_default())
             .unwrap();
 
         let res = execute(
