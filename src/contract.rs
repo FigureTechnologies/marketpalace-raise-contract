@@ -505,9 +505,9 @@ mod tests {
 
     use crate::mock::wasm_smart_mock_dependencies;
     use crate::sub::{SubCapitalCall, SubCapitalCalls};
-    use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{from_binary, Addr, SystemResult};
-    use provwasm_mocks::mock_dependencies;
+    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
+    use cosmwasm_std::{from_binary, Addr, OwnedDeps, SystemResult};
+    use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     impl State {
         fn test_default() -> State {
@@ -529,6 +529,20 @@ mod tests {
                 issued_withdrawals: HashSet::new(),
             }
         }
+    }
+
+    fn default_deps(
+        update_state: Option<fn(&mut State)>,
+    ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier> {
+        let mut deps = mock_dependencies(&[]);
+
+        let mut state = State::test_default();
+        if let Some(update) = update_state {
+            update(&mut state);
+        }
+        config(&mut deps.storage).save(&state).unwrap();
+
+        deps
     }
 
     #[test]
@@ -574,11 +588,7 @@ mod tests {
 
     #[test]
     fn recover() {
-        let mut deps = mock_dependencies(&vec![]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         execute(
             deps.as_mut(),
@@ -597,11 +607,7 @@ mod tests {
 
     #[test]
     fn fail_bad_actor_recover() {
-        let mut deps = mock_dependencies(&vec![]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         let res = execute(
             deps.as_mut(),
@@ -620,11 +626,7 @@ mod tests {
 
     #[test]
     fn propose_subscription() {
-        let mut deps = mock_dependencies(&vec![]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         // propose a sub as lp
         let res = execute(
@@ -643,12 +645,9 @@ mod tests {
 
     #[test]
     fn accept_subscription() {
-        let mut deps = mock_dependencies(&[]);
-
-        let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-
-        config(&mut deps.storage).save(&state).unwrap();
+        let mut deps = default_deps(Some(|state| {
+            state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
 
         // accept pending sub as gp
         let res = execute(
@@ -676,11 +675,7 @@ mod tests {
 
     #[test]
     fn issue_calls() {
-        let mut deps = mock_dependencies(&vec![]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         // issue calls
         let res = execute(
@@ -746,11 +741,7 @@ mod tests {
 
     #[test]
     fn issue_distributions() {
-        let mut deps = mock_dependencies(&[]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         let res = execute(
             deps.as_mut(),
@@ -771,11 +762,7 @@ mod tests {
 
     #[test]
     fn redeem_capital() {
-        let mut deps = mock_dependencies(&[]);
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
+        let mut deps = default_deps(None);
 
         let res = execute(
             deps.as_mut(),
