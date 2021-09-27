@@ -39,7 +39,8 @@ pub fn instantiate(
         admin: msg.admin,
         acceptable_accreditations: msg.acceptable_accreditations,
         other_required_tags: msg.other_required_tags,
-        asset_denom: format!("{}.investment", env.contract.address),
+        commitment_denom: format!("{}.commitment", env.contract.address),
+        investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
         min_commitment: msg.min_commitment,
@@ -51,25 +52,27 @@ pub fn instantiate(
     };
     config(deps.storage).save(&state)?;
 
-    let create = create_marker(
-        msg.target as u128,
-        state.asset_denom.clone(),
-        MarkerType::Coin,
-    )?;
-    let grant = grant_marker_access(
-        state.asset_denom.clone(),
-        env.contract.address,
-        vec![
-            MarkerAccess::Admin,
-            MarkerAccess::Mint,
-            MarkerAccess::Burn,
-            MarkerAccess::Withdraw,
-        ],
-    )?;
-    let finalize = finalize_marker(state.asset_denom.clone())?;
-    let activate = activate_marker(state.asset_denom)?;
+    let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
+        Ok(vec![
+            create_marker(state.target.clone() as u128, denom.clone(), MarkerType::Coin)?,
+            grant_marker_access(
+                denom.clone(),
+                env.contract.address.clone(),
+                vec![
+                    MarkerAccess::Admin,
+                    MarkerAccess::Mint,
+                    MarkerAccess::Burn,
+                    MarkerAccess::Withdraw,
+                ],
+            )?,
+            finalize_marker(denom.clone())?,
+            activate_marker(denom.clone())?,
+        ])
+    };
 
-    Ok(Response::default().add_messages(vec![create, grant, finalize, activate]))
+    Ok(Response::default()
+        .add_messages(create_and_activate_marker(state.commitment_denom.clone())?)
+        .add_messages(create_and_activate_marker(state.investment_denom.clone())?))
 }
 
 #[entry_point]
@@ -126,7 +129,7 @@ pub fn execute(
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, info, calls),
+        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, env, info, calls),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
@@ -266,9 +269,9 @@ pub fn try_accept_subscriptions(
         .flat_map(|accept| {
             vec![
                 withdraw_coins(
-                    state.asset_denom.clone(),
+                    state.commitment_denom.clone(),
                     accept.commitment as u128,
-                    state.asset_denom.clone(),
+                    state.commitment_denom.clone(),
                     env.contract.address.clone(),
                 )
                 .unwrap(),
@@ -276,7 +279,7 @@ pub fn try_accept_subscriptions(
                     wasm_execute(
                         accept.subscription,
                         &SubExecuteMsg::Accept {},
-                        coins(accept.commitment as u128, state.asset_denom.clone()),
+                        coins(accept.commitment as u128, state.commitment_denom.clone()),
                     )
                     .unwrap(),
                 ),
@@ -322,6 +325,7 @@ pub fn try_issue_calls(
 
 pub fn try_close_calls(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     calls: HashSet<CallClosure>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
@@ -333,7 +337,7 @@ pub fn try_close_calls(
 
     let close_messages: Vec<CosmosMsg<ProvenanceMsg>> = calls
         .into_iter()
-        .map(|call| {
+        .flat_map(|call| {
             let transactions: SubTransactions = deps
                 .querier
                 .query_wasm_smart(call.subscription.clone(), &SubQueryMsg::GetTransactions {})
@@ -341,17 +345,23 @@ pub fn try_close_calls(
 
             let active_call_amount = transactions.capital_calls.active.unwrap().amount;
 
-            CosmosMsg::Wasm(
-                wasm_execute(
-                    call.subscription.clone(),
-                    &SubExecuteMsg::CloseCapitalCall {},
-                    coins(
-                        active_call_amount as u128,
-                        format!("{}.commitment", call.subscription),
-                    ),
+            vec![
+                withdraw_coins(
+                    state.investment_denom.clone(),
+                    active_call_amount as u128,
+                    state.investment_denom.clone(),
+                    env.contract.address.clone(),
                 )
                 .unwrap(),
-            )
+                CosmosMsg::Wasm(
+                    wasm_execute(
+                        call.subscription.clone(),
+                        &SubExecuteMsg::CloseCapitalCall {},
+                        coins(active_call_amount as u128, state.investment_denom.clone()),
+                    )
+                    .unwrap(),
+                ),
+            ]
         })
         .collect();
 
@@ -483,7 +493,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetTerms {} => to_binary(&Terms {
             acceptable_accreditations: state.acceptable_accreditations,
             other_required_tags: state.other_required_tags,
-            asset_denom: state.asset_denom,
+            commitment_denom: state.commitment_denom,
+            investment_denom: state.investment_denom,
             capital_denom: state.capital_denom,
             target: state.target,
             min_commitment: state.min_commitment,
@@ -518,7 +529,8 @@ mod tests {
                 admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
-                asset_denom: String::from("fund_coin"),
+                commitment_denom: String::from("commitment_coin"),
+                investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
                 min_commitment: Some(10_000),
@@ -567,7 +579,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(4, res.messages.len());
+        assert_eq!(8, res.messages.len());
 
         // verify raise is in active status
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
@@ -579,7 +591,8 @@ mod tests {
         let terms: Terms = from_binary(&res).unwrap();
         assert_eq!(0, terms.acceptable_accreditations.len());
         assert_eq!(0, terms.other_required_tags.len());
-        assert_eq!("cosmos2contract.investment", terms.asset_denom);
+        assert_eq!("cosmos2contract.commitment", terms.commitment_denom);
+        assert_eq!("cosmos2contract.investment", terms.investment_denom);
         assert_eq!("stable_coin", terms.capital_denom);
         assert_eq!(5_000_000, terms.target);
         assert_eq!(10_000, terms.min_commitment.unwrap());
@@ -736,7 +749,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(1, res.messages.len());
+        assert_eq!(2, res.messages.len());
     }
 
     #[test]

@@ -170,7 +170,8 @@ pub enum QueryMsg {
 pub struct Terms {
     pub acceptable_accreditations: HashSet<String>,
     pub other_required_tags: HashSet<String>,
-    pub asset_denom: String,
+    pub commitment_denom: String,
+    pub investment_denom: String,
     pub capital_denom: String,
     pub target: u64,
     pub min_commitment: Option<u64>,
