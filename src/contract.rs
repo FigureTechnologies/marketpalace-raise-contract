@@ -16,11 +16,12 @@ use crate::msg::{
 };
 use crate::state::{config, config_read, State, Status, Withdrawal};
 use crate::sub::{
-    SubCapitalCallIssuance, SubExecuteMsg, SubInstantiateMsg, SubQueryMsg, SubTransactions,
+    SubCapitalCallIssuance, SubExecuteMsg, SubInstantiateMsg, SubQueryMsg, SubTerms,
+    SubTransactions,
 };
 
-fn contract_error(err: &str) -> ContractError {
-    ContractError::Std(StdError::generic_err(err))
+fn contract_error<T>(err: &str) -> Result<T, ContractError> {
+    Err(ContractError::Std(StdError::generic_err(err)))
 }
 
 // Note, you can use StdResult in some functions where you do not
@@ -54,7 +55,11 @@ pub fn instantiate(
 
     let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
         Ok(vec![
-            create_marker(state.target.clone() as u128, denom.clone(), MarkerType::Coin)?,
+            create_marker(
+                state.target.clone() as u128,
+                denom.clone(),
+                MarkerType::Coin,
+            )?,
             grant_marker_access(
                 denom.clone(),
                 env.contract.address.clone(),
@@ -85,10 +90,10 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 Ok(state)
             })?;
         } else {
-            return Err(contract_error("no contract address found"));
+            return contract_error("no contract address found");
         }
     } else {
-        return Err(contract_error("subscription contract instantiation failed"));
+        return contract_error("subscription contract instantiation failed");
     }
 
     Ok(Response::default())
@@ -150,7 +155,7 @@ pub fn try_recover(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.admin {
-        return Err(contract_error("only admin can recover raise"));
+        return contract_error("only admin can recover raise");
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -171,51 +176,19 @@ pub fn try_propose_subscription(
     let state = config_read(deps.storage).load()?;
 
     if state.status != Status::Active {
-        return Err(contract_error("contract is not active"));
+        return contract_error("contract is not active");
     }
 
     if let Some(min) = state.min_commitment {
         if max_commitment < min {
-            return Err(contract_error(
-                "subscription max commitment is below raise minumum commitment",
-            ));
+            return contract_error("subscription max commitment is below raise minumum commitment");
         }
     }
 
     if let Some(max) = state.max_commitment {
         if min_commitment > max {
-            return Err(contract_error(
-                "subscription min commitment exceeds raise maximum commitment",
-            ));
+            return contract_error("subscription min commitment exceeds raise maximum commitment");
         }
-    }
-
-    let attributes: HashSet<String> = ProvenanceQuerier::new(&deps.querier)
-        .get_attributes(info.sender.clone(), None as Option<String>)?
-        .attributes
-        .into_iter()
-        .map(|attribute| attribute.name)
-        .collect();
-
-    if !state.acceptable_accreditations.is_empty()
-        && attributes
-            .intersection(&state.acceptable_accreditations)
-            .count()
-            == 0
-    {
-        return Err(contract_error(&format!(
-            "subscription owner must have one of acceptable accreditations: {:?}",
-            state.acceptable_accreditations
-        )));
-    }
-
-    if attributes.intersection(&state.other_required_tags).count()
-        != state.other_required_tags.len()
-    {
-        return Err(contract_error(&format!(
-            "subscription owner must have all other required tags: {:?}",
-            state.other_required_tags
-        )));
     }
 
     let create_sub = SubMsg {
@@ -247,16 +220,36 @@ pub fn try_accept_subscriptions(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    subscriptions: HashSet<AcceptSubscription>,
+    accepts: HashSet<AcceptSubscription>,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can accept subscriptions"));
+        return contract_error("only gp can accept subscriptions");
+    }
+
+    for accept in accepts.iter() {
+        let attributes = get_attributes(deps.as_ref(), accept.subscription.clone())?;
+
+        if !state.acceptable_accreditations.is_empty()
+            && no_matches(&attributes, &state.acceptable_accreditations)
+        {
+            return contract_error(&format!(
+                "subscription owner must have one of acceptable accreditations: {:?}",
+                state.acceptable_accreditations
+            ));
+        }
+
+        if missing_any(&attributes, &state.other_required_tags) {
+            return contract_error(&format!(
+                "subscription owner must have all other required tags: {:?}",
+                state.other_required_tags
+            ));
+        }
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        subscriptions.iter().for_each(|accept| {
+        accepts.iter().for_each(|accept| {
             state.pending_review_subs.remove(&accept.subscription);
             state.accepted_subs.insert(accept.subscription.clone());
         });
@@ -264,7 +257,7 @@ pub fn try_accept_subscriptions(
         Ok(state)
     })?;
 
-    let withdrawals_and_acceptances: Vec<CosmosMsg<ProvenanceMsg>> = subscriptions
+    let withdrawals_and_acceptances: Vec<CosmosMsg<ProvenanceMsg>> = accepts
         .into_iter()
         .flat_map(|accept| {
             vec![
@@ -290,6 +283,28 @@ pub fn try_accept_subscriptions(
     Ok(Response::new().add_messages(withdrawals_and_acceptances))
 }
 
+fn get_attributes(deps: Deps, address: Addr) -> StdResult<HashSet<String>> {
+    let terms: SubTerms = deps
+        .querier
+        .query_wasm_smart(address, &SubQueryMsg::GetTerms {})?;
+
+    Ok(ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(terms.lp, None as Option<String>)
+        .unwrap()
+        .attributes
+        .into_iter()
+        .map(|attribute| attribute.name)
+        .collect())
+}
+
+fn no_matches(a: &HashSet<String>, b: &HashSet<String>) -> bool {
+    a.intersection(b).count() == 0
+}
+
+fn missing_any(a: &HashSet<String>, b: &HashSet<String>) -> bool {
+    a.intersection(b).count() != b.len()
+}
+
 pub fn try_issue_calls(
     deps: DepsMut,
     info: MessageInfo,
@@ -298,7 +313,7 @@ pub fn try_issue_calls(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can issue calls"));
+        return contract_error("only gp can issue calls");
     }
 
     let calls: Vec<CosmosMsg<ProvenanceMsg>> = calls
@@ -332,7 +347,7 @@ pub fn try_close_calls(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can close calls"));
+        return contract_error("only gp can close calls");
     }
 
     let close_messages: Vec<CosmosMsg<ProvenanceMsg>> = calls
@@ -376,7 +391,7 @@ pub fn try_issue_redemptions(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can issue redemptions"));
+        return contract_error("only gp can issue redemptions");
     }
 
     let redemptions: Vec<CosmosMsg<ProvenanceMsg>> = redemptions
@@ -409,7 +424,7 @@ pub fn try_issue_distributions(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can issue distributions"));
+        return contract_error("only gp can issue distributions");
     }
 
     let distributions: Vec<CosmosMsg<ProvenanceMsg>> = distributions
@@ -443,7 +458,7 @@ pub fn try_issue_withdrawal(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return Err(contract_error("only gp can redeem capital"));
+        return contract_error("only gp can redeem capital");
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -658,9 +673,22 @@ mod tests {
 
     #[test]
     fn accept_subscription() {
-        let mut deps = default_deps(Some(|state| {
-            state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
+            SystemResult::Ok(ContractResult::Ok(
+                to_binary(&SubTerms {
+                    lp: Addr::unchecked("lp"),
+                    raise: Addr::unchecked("raise_1"),
+                    capital_denom: String::from("stable_coin"),
+                    min_commitment: 10_000,
+                    max_commitment: 100_000,
+                })
+                .unwrap(),
+            ))
+        });
+
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        config(&mut deps.storage).save(&state).unwrap();
 
         // accept pending sub as gp
         let res = execute(

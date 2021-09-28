@@ -37,7 +37,17 @@ pub struct SubCapitalCallIssuance {
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubQueryMsg {
+    GetTerms {},
     GetTransactions {},
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct SubTerms {
+    pub lp: Addr,
+    pub raise: Addr,
+    pub capital_denom: String,
+    pub min_commitment: u64,
+    pub max_commitment: u64,
 }
 
 #[derive(Deserialize, Serialize)]
