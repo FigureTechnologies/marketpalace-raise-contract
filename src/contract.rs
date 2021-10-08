@@ -55,11 +55,7 @@ pub fn instantiate(
 
     let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
         Ok(vec![
-            create_marker(
-                state.target.clone() as u128,
-                denom.clone(),
-                MarkerType::Coin,
-            )?,
+            create_marker(state.target as u128, denom.clone(), MarkerType::Coin)?,
             grant_marker_access(
                 denom.clone(),
                 env.contract.address.clone(),
@@ -71,7 +67,7 @@ pub fn instantiate(
                 ],
             )?,
             finalize_marker(denom.clone())?,
-            activate_marker(denom.clone())?,
+            activate_marker(denom)?,
         ])
     };
 
@@ -370,7 +366,7 @@ pub fn try_close_calls(
                 .unwrap(),
                 CosmosMsg::Wasm(
                     wasm_execute(
-                        call.subscription.clone(),
+                        call.subscription,
                         &SubExecuteMsg::CloseCapitalCall {},
                         coins(active_call_amount as u128, state.investment_denom.clone()),
                     )
