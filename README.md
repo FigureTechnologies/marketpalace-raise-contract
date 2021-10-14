@@ -6,8 +6,8 @@
 
 ### store contract on chain
     provenanced -t tx wasm store ./artifacts/marketpalace_raise_contract.wasm \
-      --from $(faucet) \
-      --home $N0 \
-      --chain-id chain-local \
+      --home $NODE \
+      --from validator \
+      --chain-id $CHAIN \
       --gas auto --gas-prices 1905nhash --gas-adjustment 2 \
       --yes
