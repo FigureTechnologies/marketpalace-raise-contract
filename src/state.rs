@@ -12,8 +12,8 @@ pub static CONFIG_KEY: &[u8] = b"config";
 pub struct State {
     pub subscription_code_id: u64,
     pub status: Status,
+    pub recovery_admin: Addr,
     pub gp: Addr,
-    pub admin: Addr,
     pub acceptable_accreditations: HashSet<String>,
     pub other_required_tags: HashSet<String>,
     pub commitment_denom: String,

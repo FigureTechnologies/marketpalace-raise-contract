@@ -5,7 +5,6 @@
   "required": [
     "acceptable_accreditations",
     "accepted_subs",
-    "admin",
     "capital_denom",
     "commitment_denom",
     "gp",
@@ -13,6 +12,7 @@
     "issued_withdrawals",
     "other_required_tags",
     "pending_review_subs",
+    "recovery_admin",
     "sequence",
     "status",
     "subscription_code_id",
@@ -32,9 +32,6 @@
         "$ref": "#/definitions/Addr"
       },
       "uniqueItems": true
-    },
-    "admin": {
-      "$ref": "#/definitions/Addr"
     },
     "capital_denom": {
       "type": "string"
@@ -84,6 +81,9 @@
         "$ref": "#/definitions/Addr"
       },
       "uniqueItems": true
+    },
+    "recovery_admin": {
+      "$ref": "#/definitions/Addr"
     },
     "sequence": {
       "type": "integer",

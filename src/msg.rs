@@ -9,7 +9,7 @@ use cosmwasm_std::Addr;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub subscription_code_id: u64,
-    pub admin: Addr,
+    pub recovery_admin: Addr,
     pub acceptable_accreditations: HashSet<String>,
     pub other_required_tags: HashSet<String>,
     pub capital_denom: String,

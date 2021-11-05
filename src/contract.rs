@@ -1,7 +1,7 @@
 use cosmwasm_std::{
-    coin, coins, entry_point, to_binary, wasm_execute, wasm_instantiate, Addr, Attribute, BankMsg,
-    Binary, ContractResult, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, ReplyOn,
-    Response, StdError, StdResult, SubMsg,
+    coin, coins, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, Binary,
+    ContractResult, CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, ReplyOn, Response,
+    StdError, StdResult, SubMsg, WasmMsg,
 };
 use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, withdraw_coins,
@@ -34,10 +34,10 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = State {
-        status: Status::Active,
         subscription_code_id: msg.subscription_code_id,
+        status: Status::Active,
+        recovery_admin: msg.recovery_admin,
         gp: info.sender,
-        admin: msg.admin,
         acceptable_accreditations: msg.acceptable_accreditations,
         other_required_tags: msg.other_required_tags,
         commitment_denom: format!("{}.commitment", env.contract.address),
@@ -121,6 +121,7 @@ pub fn execute(
             min_days_of_notice,
         } => try_propose_subscription(
             deps,
+            env,
             info,
             min_commitment,
             max_commitment,
@@ -150,7 +151,7 @@ pub fn try_recover(
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
-    if info.sender != state.admin {
+    if info.sender != state.recovery_admin {
         return contract_error("only admin can recover raise");
     }
 
@@ -164,6 +165,7 @@ pub fn try_recover(
 
 pub fn try_propose_subscription(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     min_commitment: u64,
     max_commitment: u64,
@@ -189,22 +191,20 @@ pub fn try_propose_subscription(
 
     let create_sub = SubMsg {
         id: 1,
-        msg: CosmosMsg::Wasm(
-            wasm_instantiate(
-                state.subscription_code_id,
-                &SubInstantiateMsg {
-                    lp: info.sender,
-                    admin: state.admin,
-                    capital_denom: state.capital_denom,
-                    min_commitment,
-                    max_commitment,
-                    min_days_of_notice,
-                },
-                vec![],
-                String::from("establish subscription"),
-            )
-            .unwrap(),
-        ),
+        msg: CosmosMsg::Wasm(WasmMsg::Instantiate {
+            admin: Some(env.contract.address.into_string()),
+            code_id: state.subscription_code_id,
+            msg: to_binary(&SubInstantiateMsg {
+                recovery_admin: state.recovery_admin,
+                lp: info.sender,
+                capital_denom: state.capital_denom,
+                min_commitment,
+                max_commitment,
+                min_days_of_notice,
+            })?,
+            funds: vec![],
+            label: String::from("establish subscription"),
+        }),
         gas_limit: None,
         reply_on: ReplyOn::Always,
     };
@@ -536,8 +536,8 @@ mod tests {
             State {
                 status: Status::Active,
                 subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
-                admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
                 commitment_denom: String::from("commitment_coin"),
@@ -580,7 +580,7 @@ mod tests {
             info,
             InstantiateMsg {
                 subscription_code_id: 0,
-                admin: Addr::unchecked("marketpalace"),
+                recovery_admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),

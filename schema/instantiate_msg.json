@@ -4,9 +4,9 @@
   "type": "object",
   "required": [
     "acceptable_accreditations",
-    "admin",
     "capital_denom",
     "other_required_tags",
+    "recovery_admin",
     "subscription_code_id",
     "target"
   ],
@@ -17,9 +17,6 @@
         "type": "string"
       },
       "uniqueItems": true
-    },
-    "admin": {
-      "$ref": "#/definitions/Addr"
     },
     "capital_denom": {
       "type": "string"
@@ -46,6 +43,9 @@
         "type": "string"
       },
       "uniqueItems": true
+    },
+    "recovery_admin": {
+      "$ref": "#/definitions/Addr"
     },
     "subscription_code_id": {
       "type": "integer",
