@@ -135,9 +135,10 @@ pub fn execute(
             calls,
             is_retroactive,
         } => try_close_calls(deps, env, info, calls, is_retroactive),
-        HandleMsg::IssueRedemptions { redemptions } => {
-            try_issue_redemptions(deps, info, redemptions)
-        }
+        HandleMsg::IssueRedemptions {
+            redemptions,
+            is_retroactive,
+        } => try_issue_redemptions(deps, info, redemptions, is_retroactive),
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
@@ -387,6 +388,7 @@ pub fn try_issue_redemptions(
     deps: DepsMut,
     info: MessageInfo,
     redemptions: HashSet<Redemption>,
+    is_retroactive: bool,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -402,6 +404,8 @@ pub fn try_issue_redemptions(
                     redemption.subscription,
                     &SubExecuteMsg::IssueRedemption {
                         redemption: redemption.asset,
+                        payment: redemption.capital,
+                        is_retroactive,
                     },
                     vec![coin(
                         redemption.capital as u128,

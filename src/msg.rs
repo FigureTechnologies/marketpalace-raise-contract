@@ -41,6 +41,7 @@ pub enum HandleMsg {
     },
     IssueRedemptions {
         redemptions: HashSet<Redemption>,
+        is_retroactive: bool,
     },
     IssueDistributions {
         distributions: HashSet<Distribution>,

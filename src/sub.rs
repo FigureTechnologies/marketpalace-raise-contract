@@ -26,6 +26,8 @@ pub enum SubExecuteMsg {
     },
     IssueRedemption {
         redemption: u64,
+        payment: u64,
+        is_retroactive: bool,
     },
     IssueDistribution {},
 }
