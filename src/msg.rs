@@ -37,6 +37,7 @@ pub enum HandleMsg {
     },
     CloseCapitalCalls {
         calls: HashSet<CallClosure>,
+        is_retroactive: bool,
     },
     IssueRedemptions {
         redemptions: HashSet<Redemption>,

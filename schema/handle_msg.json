@@ -115,7 +115,8 @@
         "close_capital_calls": {
           "type": "object",
           "required": [
-            "calls"
+            "calls",
+            "is_retroactive"
           ],
           "properties": {
             "calls": {
@@ -124,6 +125,9 @@
                 "$ref": "#/definitions/CallClosure"
               },
               "uniqueItems": true
+            },
+            "is_retroactive": {
+              "type": "boolean"
             }
           }
         }

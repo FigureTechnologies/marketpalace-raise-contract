@@ -21,7 +21,9 @@ pub enum SubExecuteMsg {
     IssueCapitalCall {
         capital_call: SubCapitalCallIssuance,
     },
-    CloseCapitalCall {},
+    CloseCapitalCall {
+        is_retroactive: bool,
+    },
     IssueRedemption {
         redemption: u64,
     },

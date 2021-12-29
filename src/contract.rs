@@ -131,7 +131,10 @@ pub fn execute(
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls { calls } => try_close_calls(deps, env, info, calls),
+        HandleMsg::CloseCapitalCalls {
+            calls,
+            is_retroactive,
+        } => try_close_calls(deps, env, info, calls, is_retroactive),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
@@ -339,6 +342,7 @@ pub fn try_close_calls(
     env: Env,
     info: MessageInfo,
     calls: HashSet<CallClosure>,
+    is_retroactive: bool,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -367,7 +371,7 @@ pub fn try_close_calls(
                 CosmosMsg::Wasm(
                     wasm_execute(
                         call.subscription,
-                        &SubExecuteMsg::CloseCapitalCall {},
+                        &SubExecuteMsg::CloseCapitalCall { is_retroactive },
                         coins(active_call_amount as u128, state.investment_denom.clone()),
                     )
                     .unwrap(),
@@ -770,6 +774,7 @@ mod tests {
                 }]
                 .into_iter()
                 .collect(),
+                is_retroactive: false,
             },
         )
         .unwrap();
