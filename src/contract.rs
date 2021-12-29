@@ -139,9 +139,10 @@ pub fn execute(
             redemptions,
             is_retroactive,
         } => try_issue_redemptions(deps, info, redemptions, is_retroactive),
-        HandleMsg::IssueDistributions { distributions } => {
-            try_issue_distributions(deps, info, distributions)
-        }
+        HandleMsg::IssueDistributions {
+            distributions,
+            is_retroactive,
+        } => try_issue_distributions(deps, info, distributions, is_retroactive),
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)
         }
@@ -424,6 +425,7 @@ pub fn try_issue_distributions(
     deps: DepsMut,
     info: MessageInfo,
     distributions: HashSet<Distribution>,
+    is_retroactive: bool,
 ) -> Result<Response<ProvenanceMsg>, ContractError> {
     let state = config_read(deps.storage).load()?;
 
@@ -437,7 +439,10 @@ pub fn try_issue_distributions(
             CosmosMsg::Wasm(
                 wasm_execute(
                     distribution.subscription,
-                    &SubExecuteMsg::IssueDistribution {},
+                    &SubExecuteMsg::IssueDistribution {
+                        payment: distribution.amount,
+                        is_retroactive,
+                    },
                     vec![coin(
                         distribution.amount as u128,
                         state.capital_denom.clone(),
@@ -800,6 +805,7 @@ mod tests {
                 }]
                 .into_iter()
                 .collect(),
+                is_retroactive: false,
             },
         )
         .unwrap();

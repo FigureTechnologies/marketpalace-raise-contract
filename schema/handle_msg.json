@@ -171,7 +171,8 @@
         "issue_distributions": {
           "type": "object",
           "required": [
-            "distributions"
+            "distributions",
+            "is_retroactive"
           ],
           "properties": {
             "distributions": {
@@ -180,6 +181,9 @@
                 "$ref": "#/definitions/Distribution"
               },
               "uniqueItems": true
+            },
+            "is_retroactive": {
+              "type": "boolean"
             }
           }
         }

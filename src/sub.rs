@@ -29,7 +29,10 @@ pub enum SubExecuteMsg {
         payment: u64,
         is_retroactive: bool,
     },
-    IssueDistribution {},
+    IssueDistribution {
+        payment: u64,
+        is_retroactive: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize)]

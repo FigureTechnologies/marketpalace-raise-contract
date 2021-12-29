@@ -45,6 +45,7 @@ pub enum HandleMsg {
     },
     IssueDistributions {
         distributions: HashSet<Distribution>,
+        is_retroactive: bool,
     },
     IssueWithdrawal {
         to: Addr,
