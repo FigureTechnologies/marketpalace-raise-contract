@@ -44,6 +44,7 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
+        capital_per_share: msg.capital_per_share,
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
         sequence: 0,
@@ -51,11 +52,32 @@ pub fn instantiate(
         accepted_subs: HashSet::new(),
         issued_withdrawals: HashSet::new(),
     };
+
+    if state.not_evenly_divisble(msg.target) {
+        return contract_error("target must be evenly divisible by capital per share");
+    }
+
+    if let Some(min_commitment) = msg.min_commitment {
+        if state.not_evenly_divisble(min_commitment) {
+            return contract_error("min commitment must be evenly divisible by capital per share");
+        }
+    }
+
+    if let Some(max_commitment) = msg.max_commitment {
+        if state.not_evenly_divisble(max_commitment) {
+            return contract_error("max commitment must be evenly divisible by capital per share");
+        }
+    }
+
     config(deps.storage).save(&state)?;
 
     let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
         Ok(vec![
-            create_marker(state.target as u128, denom.clone(), MarkerType::Coin)?,
+            create_marker(
+                state.capital_to_shares(state.target) as u128,
+                denom.clone(),
+                MarkerType::Coin,
+            )?,
             grant_marker_access(
                 denom.clone(),
                 env.contract.address.clone(),
@@ -74,6 +96,16 @@ pub fn instantiate(
     Ok(Response::default()
         .add_messages(create_and_activate_marker(state.commitment_denom.clone())?)
         .add_messages(create_and_activate_marker(state.investment_denom.clone())?))
+}
+
+impl State {
+    fn not_evenly_divisble(&self, amount: u64) -> bool {
+        amount % self.capital_per_share > 0
+    }
+
+    fn capital_to_shares(&self, amount: u64) -> u64 {
+        amount / self.capital_per_share
+    }
 }
 
 #[entry_point]
@@ -247,6 +279,10 @@ pub fn try_accept_subscriptions(
                 state.other_required_tags
             ));
         }
+
+        if state.not_evenly_divisble(accept.commitment) {
+            return contract_error("accept amount must be evenly divisble by capital per share");
+        }
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -264,7 +300,7 @@ pub fn try_accept_subscriptions(
             vec![
                 withdraw_coins(
                     state.commitment_denom.clone(),
-                    accept.commitment as u128,
+                    state.capital_to_shares(accept.commitment) as u128,
                     state.commitment_denom.clone(),
                     env.contract.address.clone(),
                 )
@@ -365,7 +401,7 @@ pub fn try_close_calls(
             vec![
                 withdraw_coins(
                     state.investment_denom.clone(),
-                    active_call_amount as u128,
+                    state.capital_to_shares(active_call_amount) as u128,
                     state.investment_denom.clone(),
                     env.contract.address.clone(),
                 )
@@ -557,6 +593,7 @@ mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
+                capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
                 sequence: 0,
@@ -598,6 +635,7 @@ mod tests {
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
+                capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
             },
