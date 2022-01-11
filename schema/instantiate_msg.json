@@ -5,6 +5,7 @@
   "required": [
     "acceptable_accreditations",
     "capital_denom",
+    "capital_per_share",
     "other_required_tags",
     "recovery_admin",
     "subscription_code_id",
@@ -20,6 +21,11 @@
     },
     "capital_denom": {
       "type": "string"
+    },
+    "capital_per_share": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "max_commitment": {
       "type": [

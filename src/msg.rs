@@ -14,6 +14,7 @@ pub struct InstantiateMsg {
     pub other_required_tags: HashSet<String>,
     pub capital_denom: String,
     pub target: u64,
+    pub capital_per_share: u64,
     pub min_commitment: Option<u64>,
     pub max_commitment: Option<u64>,
 }

@@ -6,6 +6,7 @@
     "acceptable_accreditations",
     "accepted_subs",
     "capital_denom",
+    "capital_per_share",
     "commitment_denom",
     "gp",
     "investment_denom",
@@ -35,6 +36,11 @@
     },
     "capital_denom": {
       "type": "string"
+    },
+    "capital_per_share": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "commitment_denom": {
       "type": "string"

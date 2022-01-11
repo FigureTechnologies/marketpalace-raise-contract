@@ -44,6 +44,7 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         target: msg.target,
+        capital_per_share: msg.capital_per_share,
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
         sequence: 0,
@@ -51,11 +52,32 @@ pub fn instantiate(
         accepted_subs: HashSet::new(),
         issued_withdrawals: HashSet::new(),
     };
+
+    if state.not_evenly_divisble(msg.target) {
+        return contract_error("target must be evenly divisible by capital per share");
+    }
+
+    if let Some(min_commitment) = msg.min_commitment {
+        if state.not_evenly_divisble(min_commitment) {
+            return contract_error("min commitment must be evenly divisible by capital per share");
+        }
+    }
+
+    if let Some(max_commitment) = msg.max_commitment {
+        if state.not_evenly_divisble(max_commitment) {
+            return contract_error("max commitment must be evenly divisible by capital per share");
+        }
+    }
+
     config(deps.storage).save(&state)?;
 
     let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
         Ok(vec![
-            create_marker(state.target as u128, denom.clone(), MarkerType::Coin)?,
+            create_marker(
+                state.capital_to_shares(state.target) as u128,
+                denom.clone(),
+                MarkerType::Coin,
+            )?,
             grant_marker_access(
                 denom.clone(),
                 env.contract.address.clone(),
@@ -74,6 +96,16 @@ pub fn instantiate(
     Ok(Response::default()
         .add_messages(create_and_activate_marker(state.commitment_denom.clone())?)
         .add_messages(create_and_activate_marker(state.investment_denom.clone())?))
+}
+
+impl State {
+    fn not_evenly_divisble(&self, amount: u64) -> bool {
+        amount % self.capital_per_share > 0
+    }
+
+    fn capital_to_shares(&self, amount: u64) -> u64 {
+        amount / self.capital_per_share
+    }
 }
 
 #[entry_point]
@@ -247,6 +279,10 @@ pub fn try_accept_subscriptions(
                 state.other_required_tags
             ));
         }
+
+        if state.not_evenly_divisble(accept.commitment) {
+            return contract_error("accept amount must be evenly divisble by capital per share");
+        }
     }
 
     config(deps.storage).update(|mut state| -> Result<_, ContractError> {
@@ -264,7 +300,7 @@ pub fn try_accept_subscriptions(
             vec![
                 withdraw_coins(
                     state.commitment_denom.clone(),
-                    accept.commitment as u128,
+                    state.capital_to_shares(accept.commitment) as u128,
                     state.commitment_denom.clone(),
                     env.contract.address.clone(),
                 )
@@ -365,7 +401,7 @@ pub fn try_close_calls(
             vec![
                 withdraw_coins(
                     state.investment_denom.clone(),
-                    active_call_amount as u128,
+                    state.capital_to_shares(active_call_amount) as u128,
                     state.investment_denom.clone(),
                     env.contract.address.clone(),
                 )
@@ -538,10 +574,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 mod tests {
     use super::*;
 
-    use crate::mock::wasm_smart_mock_dependencies;
+    use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::sub::{SubCapitalCall, SubCapitalCalls};
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
-    use cosmwasm_std::{from_binary, Addr, OwnedDeps, SystemResult};
+    use cosmwasm_std::{from_binary, Addr, MemoryStorage, OwnedDeps, SystemResult};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     impl State {
@@ -557,6 +593,7 @@ mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
+                capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
                 sequence: 0,
@@ -581,6 +618,31 @@ mod tests {
         deps
     }
 
+    fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
+        wasm_smart_mock_dependencies(&vec![], |_, _| {
+            SystemResult::Ok(ContractResult::Ok(
+                to_binary(&SubTerms {
+                    lp: Addr::unchecked("lp"),
+                    raise: Addr::unchecked("raise_1"),
+                    capital_denom: String::from("stable_coin"),
+                    min_commitment: 10_000,
+                    max_commitment: 100_000,
+                })
+                .unwrap(),
+            ))
+        })
+    }
+
+    #[test]
+    fn not_evenly_divisble() {
+        let state = State::test_default();
+
+        assert_eq!(false, state.not_evenly_divisble(100));
+        assert_eq!(true, state.not_evenly_divisble(101));
+        assert_eq!(false, state.not_evenly_divisble(1_000));
+        assert_eq!(true, state.not_evenly_divisble(1_001));
+    }
+
     #[test]
     fn initialization() {
         let mut deps = mock_dependencies(&[]);
@@ -598,6 +660,7 @@ mod tests {
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
                 target: 5_000_000,
+                capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
             },
@@ -621,6 +684,81 @@ mod tests {
         assert_eq!(5_000_000, terms.target);
         assert_eq!(10_000, terms.min_commitment.unwrap());
         assert_eq!(100_000, terms.max_commitment.unwrap());
+    }
+
+    #[test]
+    fn init_with_bad_target() {
+        let mut deps = mock_dependencies(&[]);
+        let info = mock_info("gp", &[]);
+
+        // instantiate and verify we have 3 messages (create, grant, & activate)
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_001,
+                capital_per_share: 100,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
+    fn init_with_bad_min() {
+        let mut deps = mock_dependencies(&[]);
+        let info = mock_info("gp", &[]);
+
+        // instantiate and verify we have 3 messages (create, grant, & activate)
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                capital_per_share: 100,
+                min_commitment: Some(10_001),
+                max_commitment: Some(100_000),
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
+    fn init_with_bad_max() {
+        let mut deps = mock_dependencies(&[]);
+        let info = mock_info("gp", &[]);
+
+        // instantiate and verify we have 3 messages (create, grant, & activate)
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                capital_per_share: 100,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_001),
+            },
+        );
+        assert_eq!(true, res.is_err());
     }
 
     #[test]
@@ -682,18 +820,7 @@ mod tests {
 
     #[test]
     fn accept_subscription() {
-        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
-            SystemResult::Ok(ContractResult::Ok(
-                to_binary(&SubTerms {
-                    lp: Addr::unchecked("lp"),
-                    raise: Addr::unchecked("raise_1"),
-                    capital_denom: String::from("stable_coin"),
-                    min_commitment: 10_000,
-                    max_commitment: 100_000,
-                })
-                .unwrap(),
-            ))
-        });
+        let mut deps = mock_sub_terms();
 
         let mut state = State::test_default();
         state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
@@ -721,6 +848,31 @@ mod tests {
         let subs: Subs = from_binary(&res).unwrap();
         assert_eq!(0, subs.pending_review.len());
         assert_eq!(1, subs.accepted.len());
+    }
+
+    #[test]
+    fn accept_subscription_with_bad_amount() {
+        let mut deps = mock_sub_terms();
+
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        config(&mut deps.storage).save(&state).unwrap();
+
+        // accept pending sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::AcceptSubscriptions {
+                subscriptions: vec![AcceptSubscription {
+                    subscription: Addr::unchecked("sub_1"),
+                    commitment: 20_001,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+        assert_eq!(true, res.is_err());
     }
 
     #[test]
