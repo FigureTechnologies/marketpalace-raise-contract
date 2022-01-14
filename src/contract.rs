@@ -265,20 +265,22 @@ pub fn try_accept_subscriptions(
     for accept in accepts.iter() {
         let attributes = get_attributes(deps.as_ref(), accept.subscription.clone())?;
 
-        if !state.acceptable_accreditations.is_empty()
-            && no_matches(&attributes, &state.acceptable_accreditations)
-        {
-            return contract_error(&format!(
-                "subscription owner must have one of acceptable accreditations: {:?}",
-                state.acceptable_accreditations
-            ));
-        }
+        if !accept.is_retroactive {
+            if !state.acceptable_accreditations.is_empty()
+                && no_matches(&attributes, &state.acceptable_accreditations)
+            {
+                return contract_error(&format!(
+                    "subscription owner must have one of acceptable accreditations: {:?}",
+                    state.acceptable_accreditations
+                ));
+            }
 
-        if missing_any(&attributes, &state.other_required_tags) {
-            return contract_error(&format!(
-                "subscription owner must have all other required tags: {:?}",
-                state.other_required_tags
-            ));
+            if missing_any(&attributes, &state.other_required_tags) {
+                return contract_error(&format!(
+                    "subscription owner must have all other required tags: {:?}",
+                    state.other_required_tags
+                ));
+            }
         }
 
         if state.not_evenly_divisble(accept.commitment) {
@@ -837,6 +839,7 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_000,
+                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
@@ -869,6 +872,7 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_001,
+                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
