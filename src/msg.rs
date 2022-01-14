@@ -59,6 +59,7 @@ pub enum HandleMsg {
 pub struct AcceptSubscription {
     pub subscription: Addr,
     pub commitment: u64,
+    pub is_retroactive: bool,
 }
 
 impl PartialEq for AcceptSubscription {
