@@ -237,6 +237,7 @@ pub fn try_propose_subscription(
                 capital_denom: state.capital_denom,
                 min_commitment,
                 max_commitment,
+                capital_per_share: state.capital_per_share,
                 min_days_of_notice,
             })?,
             funds: vec![],
