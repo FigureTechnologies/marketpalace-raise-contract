@@ -416,7 +416,10 @@ pub fn try_close_calls(
                     wasm_execute(
                         call.subscription,
                         &SubExecuteMsg::CloseCapitalCall { is_retroactive },
-                        coins(active_call_amount as u128, state.investment_denom.clone()),
+                        coins(
+                            state.capital_to_shares(active_call_amount) as u128,
+                            state.investment_denom.clone(),
+                        ),
                     )
                     .unwrap(),
                 ),
