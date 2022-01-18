@@ -312,7 +312,10 @@ pub fn try_accept_subscriptions(
                     wasm_execute(
                         accept.subscription,
                         &SubExecuteMsg::Accept {},
-                        coins(accept.commitment as u128, state.commitment_denom.clone()),
+                        coins(
+                            state.capital_to_shares(accept.commitment) as u128,
+                            state.commitment_denom.clone(),
+                        ),
                     )
                     .unwrap(),
                 ),
