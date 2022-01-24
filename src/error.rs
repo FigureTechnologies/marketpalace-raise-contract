@@ -11,3 +11,7 @@ pub enum ContractError {
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
 }
+
+pub fn contract_error<T>(err: &str) -> Result<T, ContractError> {
+    Err(ContractError::Std(StdError::generic_err(err)))
+}

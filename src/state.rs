@@ -29,6 +29,16 @@ pub struct State {
     pub issued_withdrawals: HashSet<Withdrawal>,
 }
 
+impl State {
+    pub fn not_evenly_divisble(&self, amount: u64) -> bool {
+        amount % self.capital_per_share > 0
+    }
+
+    pub fn capital_to_shares(&self, amount: u64) -> u64 {
+        amount / self.capital_per_share
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum Status {
     Active,
@@ -62,4 +72,43 @@ pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
 
 pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl State {
+        pub fn test_default() -> State {
+            State {
+                status: Status::Active,
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                gp: Addr::unchecked("gp"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                commitment_denom: String::from("commitment_coin"),
+                investment_denom: String::from("investment_coin"),
+                capital_denom: String::from("stable_coin"),
+                target: 5_000_000,
+                capital_per_share: 100,
+                min_commitment: Some(10_000),
+                max_commitment: Some(100_000),
+                sequence: 0,
+                pending_review_subs: HashSet::new(),
+                accepted_subs: HashSet::new(),
+                issued_withdrawals: HashSet::new(),
+            }
+        }
+    }
+
+    #[test]
+    fn not_evenly_divisble() {
+        let state = State::test_default();
+
+        assert_eq!(false, state.not_evenly_divisble(100));
+        assert_eq!(true, state.not_evenly_divisble(101));
+        assert_eq!(false, state.not_evenly_divisble(1_000));
+        assert_eq!(true, state.not_evenly_divisble(1_001));
+    }
 }
