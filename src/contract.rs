@@ -211,12 +211,9 @@ pub fn try_issue_withdrawal(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::state::State;
-    use crate::sub_msg::SubTerms;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
-    use cosmwasm_std::to_binary;
-    use cosmwasm_std::{Addr, MemoryStorage, OwnedDeps, SystemResult};
+    use cosmwasm_std::{Addr, OwnedDeps};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     pub fn default_deps(
@@ -231,21 +228,6 @@ pub mod tests {
         config(&mut deps.storage).save(&state).unwrap();
 
         deps
-    }
-
-    pub fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
-        wasm_smart_mock_dependencies(&vec![], |_, _| {
-            SystemResult::Ok(ContractResult::Ok(
-                to_binary(&SubTerms {
-                    lp: Addr::unchecked("lp"),
-                    raise: Addr::unchecked("raise_1"),
-                    capital_denom: String::from("stable_coin"),
-                    min_commitment: 10_000,
-                    max_commitment: 100_000,
-                })
-                .unwrap(),
-            ))
-        })
     }
 
     #[test]

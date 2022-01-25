@@ -175,19 +175,41 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::contract::tests::mock_sub_terms;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
+    use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
     use crate::msg::Subs;
     use crate::query::query;
     use crate::state::State;
+    use crate::sub_msg::SubTerms;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::testing::MockApi;
+    use cosmwasm_std::to_binary;
+    use cosmwasm_std::ContractResult;
+    use cosmwasm_std::MemoryStorage;
+    use cosmwasm_std::OwnedDeps;
+    use cosmwasm_std::SystemResult;
     use provwasm_std::MarkerMsgParams;
+
+    pub fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
+        wasm_smart_mock_dependencies(&vec![], |_, _| {
+            SystemResult::Ok(ContractResult::Ok(
+                to_binary(&SubTerms {
+                    lp: Addr::unchecked("lp"),
+                    raise: Addr::unchecked("raise_1"),
+                    capital_denom: String::from("stable_coin"),
+                    min_commitment: 10_000,
+                    max_commitment: 100_000,
+                })
+                .unwrap(),
+            ))
+        })
+    }
 
     #[test]
 
