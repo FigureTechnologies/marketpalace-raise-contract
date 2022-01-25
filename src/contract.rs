@@ -211,9 +211,11 @@ pub fn try_issue_withdrawal(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::mock::msg_at_index;
+    use crate::mock::wasm_msg;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
-    use cosmwasm_std::{Addr, OwnedDeps};
+    use cosmwasm_std::{Addr, OwnedDeps, WasmMsg};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     pub fn default_deps(
@@ -228,6 +230,57 @@ pub mod tests {
         config(&mut deps.storage).save(&state).unwrap();
 
         deps
+    }
+
+    #[test]
+    fn issue_redemptions() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[coin(10_000, "stable_coin")]),
+            HandleMsg::IssueRedemptions {
+                redemptions: vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    asset: 10_000,
+                    capital: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: false,
+            },
+        )
+        .unwrap();
+
+        // verify execute message sent
+        assert_eq!(1, res.messages.len());
+        assert!(matches!(
+            wasm_msg(msg_at_index(&res, 0)),
+            WasmMsg::Execute { .. }
+        ));
+    }
+
+    #[test]
+    fn issue_redemptions_bad_actor() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[coin(10_000, "stable_coin")]),
+            HandleMsg::IssueRedemptions {
+                redemptions: vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    asset: 10_000,
+                    capital: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: false,
+            },
+        );
+        assert!(res.is_err());
     }
 
     #[test]

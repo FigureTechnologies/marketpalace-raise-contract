@@ -107,8 +107,8 @@ mod tests {
         let state = State::test_default();
 
         assert_eq!(false, state.not_evenly_divisble(100));
-        assert_eq!(true, state.not_evenly_divisble(101));
+        assert!(state.not_evenly_divisble(101));
         assert_eq!(false, state.not_evenly_divisble(1_000));
-        assert_eq!(true, state.not_evenly_divisble(1_001));
+        assert!(state.not_evenly_divisble(1_001));
     }
 }

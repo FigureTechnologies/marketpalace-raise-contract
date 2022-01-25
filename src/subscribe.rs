@@ -246,7 +246,7 @@ mod tests {
                 min_days_of_notice: None,
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
                 min_days_of_notice: None,
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -334,7 +334,7 @@ mod tests {
                 .collect(),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -361,7 +361,7 @@ mod tests {
                 .collect(),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -388,7 +388,7 @@ mod tests {
                 .collect(),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -414,6 +414,6 @@ mod tests {
                 .collect(),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 }

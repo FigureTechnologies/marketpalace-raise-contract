@@ -196,7 +196,7 @@ mod tests {
                 max_commitment: Some(100_000),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
                 max_commitment: Some(100_000),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -246,6 +246,6 @@ mod tests {
                 max_commitment: Some(100_001),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 }

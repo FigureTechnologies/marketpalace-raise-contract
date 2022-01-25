@@ -63,7 +63,7 @@ mod tests {
                 gp: Addr::unchecked("bad_actor"),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
 
         // verify that gp has NOT been updated
         let state = config_read(&deps.storage).load().unwrap();
