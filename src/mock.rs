@@ -1,6 +1,7 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Response;
+use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
@@ -69,6 +70,14 @@ pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
             panic!("not a marker message!")
         }
     } else {
-        panic!("not a provenance message!")
+        panic!("not a cosmos custom message!")
+    }
+}
+
+pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
+    if let CosmosMsg::Wasm(msg) = msg {
+        msg
+    } else {
+        panic!("not a cosmos wasm message")
     }
 }

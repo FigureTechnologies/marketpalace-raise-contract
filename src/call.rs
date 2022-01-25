@@ -29,26 +29,19 @@ pub fn try_issue_calls(
         return contract_error("only gp can issue calls");
     }
 
-    let calls: Vec<CosmosMsg<ProvenanceMsg>> = calls
-        .into_iter()
-        .map(|call| {
-            CosmosMsg::Wasm(
-                wasm_execute(
-                    call.subscription,
-                    &SubExecuteMsg::IssueCapitalCall {
-                        capital_call: SubCapitalCallIssuance {
-                            amount: call.amount,
-                            days_of_notice: call.days_of_notice,
-                        },
-                    },
-                    vec![],
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(calls))
+    Ok(Response::new().add_messages(calls.into_iter().map(|call| {
+        wasm_execute(
+            call.subscription,
+            &SubExecuteMsg::IssueCapitalCall {
+                capital_call: SubCapitalCallIssuance {
+                    amount: call.amount,
+                    days_of_notice: call.days_of_notice,
+                },
+            },
+            vec![],
+        )
+        .unwrap()
+    })))
 }
 
 pub fn try_close_calls(
@@ -104,6 +97,8 @@ pub fn try_close_calls(
 mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
+    use crate::mock::msg_at_index;
+    use crate::mock::wasm_msg;
     use crate::mock::wasm_smart_mock_dependencies;
     use crate::msg::CallClosure;
     use crate::msg::CallIssuance;
@@ -119,6 +114,7 @@ mod tests {
     use cosmwasm_std::Addr;
     use cosmwasm_std::ContractResult;
     use cosmwasm_std::SystemResult;
+    use cosmwasm_std::WasmMsg;
     use std::collections::HashSet;
 
     #[test]
@@ -142,7 +138,36 @@ mod tests {
             },
         )
         .unwrap();
+
+        // verify wasm execute message is sent
         assert_eq!(1, res.messages.len());
+        assert!(matches!(
+            wasm_msg(msg_at_index(&res, 0)),
+            WasmMsg::Execute { .. }
+        ))
+    }
+
+    #[test]
+
+    fn issue_calls_bad_actor() {
+        let mut deps = default_deps(None);
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::IssueCapitalCalls {
+                calls: vec![CallIssuance {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    days_of_notice: None,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+        assert_eq!(true, res.is_err());
     }
 
     #[test]
