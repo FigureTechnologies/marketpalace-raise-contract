@@ -97,6 +97,7 @@ pub fn try_close_calls(
 mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
+    use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
     use crate::mock::wasm_smart_mock_dependencies;
@@ -115,6 +116,7 @@ mod tests {
     use cosmwasm_std::ContractResult;
     use cosmwasm_std::SystemResult;
     use cosmwasm_std::WasmMsg;
+    use provwasm_std::MarkerMsgParams;
     use std::collections::HashSet;
 
     #[test]
@@ -167,7 +169,7 @@ mod tests {
                 .collect(),
             },
         );
-        assert_eq!(true, res.is_err());
+        assert!(res.is_err());
     }
 
     #[test]
@@ -211,6 +213,37 @@ mod tests {
             },
         )
         .unwrap();
+
+        // verify that withdraw and execute messages are sent
         assert_eq!(2, res.messages.len());
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 0)),
+            MarkerMsgParams::WithdrawCoins { .. }
+        ));
+        assert!(matches!(
+            wasm_msg(msg_at_index(&res, 1)),
+            WasmMsg::Execute { .. }
+        ));
+    }
+
+    #[test]
+    fn close_calls_bad_actor() {
+        let mut deps = default_deps(None);
+
+        // close call
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::CloseCapitalCalls {
+                calls: vec![CallClosure {
+                    subscription: Addr::unchecked("sub_1"),
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: false,
+            },
+        );
+        assert!(res.is_err());
     }
 }
