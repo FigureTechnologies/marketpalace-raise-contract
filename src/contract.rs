@@ -1,18 +1,20 @@
+use crate::call::try_close_calls;
+use crate::call::try_issue_calls;
 use crate::error::contract_error;
 use crate::recover::try_recover;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_propose_subscription;
 use cosmwasm_std::{
-    coin, coins, entry_point, wasm_execute, Addr, Attribute, BankMsg, ContractResult, CosmosMsg,
-    DepsMut, Env, Event, MessageInfo, Reply, Response,
+    coin, entry_point, wasm_execute, Addr, Attribute, BankMsg, ContractResult, CosmosMsg, DepsMut,
+    Env, Event, MessageInfo, Reply, Response,
 };
-use provwasm_std::{withdraw_coins, ProvenanceMsg};
+use provwasm_std::ProvenanceMsg;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
-use crate::msg::{CallClosure, CallIssuance, Distribution, HandleMsg, Redemption};
+use crate::msg::{Distribution, HandleMsg, Redemption};
 use crate::state::{config, config_read, Withdrawal};
-use crate::sub_msg::{SubCapitalCallIssuance, SubExecuteMsg, SubQueryMsg, SubTransactions};
+use crate::sub_msg::SubExecuteMsg;
 
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
@@ -81,88 +83,6 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> Co
             try_issue_withdrawal(deps, info, env, to, amount, memo)
         }
     }
-}
-
-pub fn try_issue_calls(
-    deps: DepsMut,
-    info: MessageInfo,
-    calls: HashSet<CallIssuance>,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can issue calls");
-    }
-
-    let calls: Vec<CosmosMsg<ProvenanceMsg>> = calls
-        .into_iter()
-        .map(|call| {
-            CosmosMsg::Wasm(
-                wasm_execute(
-                    call.subscription,
-                    &SubExecuteMsg::IssueCapitalCall {
-                        capital_call: SubCapitalCallIssuance {
-                            amount: call.amount,
-                            days_of_notice: call.days_of_notice,
-                        },
-                    },
-                    vec![],
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(calls))
-}
-
-pub fn try_close_calls(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    calls: HashSet<CallClosure>,
-    is_retroactive: bool,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can close calls");
-    }
-
-    let close_messages: Vec<CosmosMsg<ProvenanceMsg>> = calls
-        .into_iter()
-        .flat_map(|call| {
-            let transactions: SubTransactions = deps
-                .querier
-                .query_wasm_smart(call.subscription.clone(), &SubQueryMsg::GetTransactions {})
-                .unwrap();
-
-            let active_call_amount = transactions.capital_calls.active.unwrap().amount;
-
-            vec![
-                withdraw_coins(
-                    state.investment_denom.clone(),
-                    state.capital_to_shares(active_call_amount) as u128,
-                    state.investment_denom.clone(),
-                    env.contract.address.clone(),
-                )
-                .unwrap(),
-                CosmosMsg::Wasm(
-                    wasm_execute(
-                        call.subscription,
-                        &SubExecuteMsg::CloseCapitalCall { is_retroactive },
-                        coins(
-                            state.capital_to_shares(active_call_amount) as u128,
-                            state.investment_denom.clone(),
-                        ),
-                    )
-                    .unwrap(),
-                ),
-            ]
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(close_messages))
 }
 
 pub fn try_issue_redemptions(
@@ -294,7 +214,6 @@ pub mod tests {
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::state::State;
     use crate::sub_msg::SubTerms;
-    use crate::sub_msg::{SubCapitalCall, SubCapitalCalls};
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
     use cosmwasm_std::to_binary;
     use cosmwasm_std::{Addr, MemoryStorage, OwnedDeps, SystemResult};
@@ -327,73 +246,6 @@ pub mod tests {
                 .unwrap(),
             ))
         })
-    }
-
-    #[test]
-    fn issue_calls() {
-        let mut deps = default_deps(None);
-
-        // issue calls
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &[]),
-            HandleMsg::IssueCapitalCalls {
-                calls: vec![CallIssuance {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    days_of_notice: None,
-                }]
-                .into_iter()
-                .collect(),
-            },
-        )
-        .unwrap();
-        assert_eq!(1, res.messages.len());
-    }
-
-    #[test]
-    fn close_calls() {
-        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
-            SystemResult::Ok(ContractResult::Ok(
-                to_binary(&SubTransactions {
-                    capital_calls: SubCapitalCalls {
-                        active: Some(SubCapitalCall {
-                            sequence: 1,
-                            amount: 10_000,
-                            days_of_notice: None,
-                        }),
-                        closed: HashSet::new(),
-                        cancelled: HashSet::new(),
-                    },
-                    redemptions: HashSet::new(),
-                    distributions: HashSet::new(),
-                    withdrawals: HashSet::new(),
-                })
-                .unwrap(),
-            ))
-        });
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
-            .unwrap();
-
-        // close call
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &[]),
-            HandleMsg::CloseCapitalCalls {
-                calls: vec![CallClosure {
-                    subscription: Addr::unchecked("sub_1"),
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
-            },
-        )
-        .unwrap();
-        assert_eq!(2, res.messages.len());
     }
 
     #[test]
