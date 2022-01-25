@@ -1,4 +1,5 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
+use cosmwasm_std::BankMsg;
 use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Response;
 use cosmwasm_std::WasmMsg;
@@ -60,6 +61,14 @@ pub fn wasm_smart_mock_dependencies(
 
 pub fn msg_at_index(res: &Response<ProvenanceMsg>, i: usize) -> &CosmosMsg<ProvenanceMsg> {
     &res.messages.get(i).unwrap().msg
+}
+
+pub fn bank_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &BankMsg {
+    if let CosmosMsg::Bank(msg) = msg {
+        msg
+    } else {
+        panic!("not a cosmos bank message!")
+    }
 }
 
 pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {

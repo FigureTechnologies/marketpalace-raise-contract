@@ -211,6 +211,7 @@ pub fn try_issue_withdrawal(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::mock::bank_msg;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
     use crate::state::State;
@@ -302,11 +303,38 @@ pub mod tests {
             },
         )
         .unwrap();
+
+        // verify execute message sent
         assert_eq!(1, res.messages.len());
+        assert!(matches!(
+            wasm_msg(msg_at_index(&res, 0)),
+            WasmMsg::Execute { .. }
+        ));
     }
 
     #[test]
-    fn redeem_capital() {
+    fn issue_distributions_bad_actor() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[coin(10_000, "stable_coin")]),
+            HandleMsg::IssueDistributions {
+                distributions: vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: false,
+            },
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn issue_withdrawal() {
         let mut deps = default_deps(None);
 
         let res = execute(
@@ -320,6 +348,29 @@ pub mod tests {
             },
         )
         .unwrap();
+
+        // verify that send message is sent
         assert_eq!(1, res.messages.len());
+        assert!(matches!(
+            bank_msg(msg_at_index(&res, 0)),
+            BankMsg::Send { .. }
+        ));
+    }
+
+    #[test]
+    fn issue_withdrawal_bad_actor() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::IssueWithdrawal {
+                to: Addr::unchecked("omni"),
+                amount: 10_000,
+                memo: None,
+            },
+        );
+        assert!(res.is_err());
     }
 }
