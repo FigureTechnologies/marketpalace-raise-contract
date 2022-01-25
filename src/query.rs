@@ -15,7 +15,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             commitment_denom: state.commitment_denom,
             investment_denom: state.investment_denom,
             capital_denom: state.capital_denom,
-            target: state.target,
             capital_per_share: state.capital_per_share,
             min_commitment: state.min_commitment,
             max_commitment: state.max_commitment,

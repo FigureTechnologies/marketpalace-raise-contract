@@ -29,7 +29,6 @@ pub fn instantiate(
         commitment_denom: format!("{}.commitment", env.contract.address),
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
-        target: msg.target,
         capital_per_share: msg.capital_per_share,
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
@@ -38,10 +37,6 @@ pub fn instantiate(
         accepted_subs: HashSet::new(),
         issued_withdrawals: HashSet::new(),
     };
-
-    if state.not_evenly_divisble(msg.target) {
-        return contract_error("target must be evenly divisible by capital per share");
-    }
 
     if let Some(min_commitment) = msg.min_commitment {
         if state.not_evenly_divisble(min_commitment) {
@@ -59,11 +54,7 @@ pub fn instantiate(
 
     let create_and_activate_marker = |denom: String| -> StdResult<Vec<CosmosMsg<ProvenanceMsg>>> {
         Ok(vec![
-            create_marker(
-                state.capital_to_shares(state.target) as u128,
-                denom.clone(),
-                MarkerType::Coin,
-            )?,
+            create_marker(0, denom.clone(), MarkerType::Coin)?,
             grant_marker_access(
                 denom.clone(),
                 env.contract.address.clone(),
@@ -113,7 +104,6 @@ mod tests {
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
                 capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
@@ -169,34 +159,8 @@ mod tests {
         assert_eq!("cosmos2contract.commitment", terms.commitment_denom);
         assert_eq!("cosmos2contract.investment", terms.investment_denom);
         assert_eq!("stable_coin", terms.capital_denom);
-        assert_eq!(5_000_000, terms.target);
         assert_eq!(10_000, terms.min_commitment.unwrap());
         assert_eq!(100_000, terms.max_commitment.unwrap());
-    }
-
-    #[test]
-    fn init_with_bad_target() {
-        let mut deps = mock_dependencies(&[]);
-        let info = mock_info("gp", &[]);
-
-        // instantiate and verify we have 3 messages (create, grant, & activate)
-        let res = instantiate(
-            deps.as_mut(),
-            mock_env(),
-            info,
-            InstantiateMsg {
-                subscription_code_id: 0,
-                recovery_admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                capital_denom: String::from("stable_coin"),
-                target: 5_000_001,
-                capital_per_share: 100,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
-            },
-        );
-        assert!(res.is_err());
     }
 
     #[test]
@@ -215,7 +179,6 @@ mod tests {
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
                 capital_per_share: 100,
                 min_commitment: Some(10_001),
                 max_commitment: Some(100_000),
@@ -240,7 +203,6 @@ mod tests {
                 acceptable_accreditations: HashSet::new(),
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
-                target: 5_000_000,
                 capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_001),

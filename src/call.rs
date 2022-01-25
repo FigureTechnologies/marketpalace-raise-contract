@@ -9,13 +9,14 @@ use crate::sub_msg::SubQueryMsg;
 use crate::sub_msg::SubTransactions;
 use cosmwasm_std::coins;
 use cosmwasm_std::wasm_execute;
-use cosmwasm_std::CosmosMsg;
+use cosmwasm_std::Addr;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
+use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
-use provwasm_std::ProvenanceMsg;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 pub fn try_issue_calls(
@@ -57,9 +58,9 @@ pub fn try_close_calls(
         return contract_error("only gp can close calls");
     }
 
-    let close_messages: Vec<CosmosMsg<ProvenanceMsg>> = calls
-        .into_iter()
-        .flat_map(|call| {
+    let transactions: HashMap<Addr, u64> = calls
+        .iter()
+        .map(|call| {
             let transactions: SubTransactions = deps
                 .querier
                 .query_wasm_smart(call.subscription.clone(), &SubQueryMsg::GetTransactions {})
@@ -67,30 +68,35 @@ pub fn try_close_calls(
 
             let active_call_amount = transactions.capital_calls.active.unwrap().amount;
 
-            vec![
-                withdraw_coins(
-                    state.investment_denom.clone(),
-                    state.capital_to_shares(active_call_amount) as u128,
-                    state.investment_denom.clone(),
-                    env.contract.address.clone(),
-                )
-                .unwrap(),
-                CosmosMsg::Wasm(
-                    wasm_execute(
-                        call.subscription,
-                        &SubExecuteMsg::CloseCapitalCall { is_retroactive },
-                        coins(
-                            state.capital_to_shares(active_call_amount) as u128,
-                            state.investment_denom.clone(),
-                        ),
-                    )
-                    .unwrap(),
-                ),
-            ]
+            (call.subscription.clone(), active_call_amount)
         })
         .collect();
 
-    Ok(Response::new().add_messages(close_messages))
+    let commitment_total = transactions.values().sum();
+    let supply = state.capital_to_shares(commitment_total);
+    let mint = mint_marker_supply(supply.into(), state.investment_denom.clone())?;
+    let withdraw = withdraw_coins(
+        state.investment_denom.clone(),
+        supply.into(),
+        state.investment_denom.clone(),
+        env.contract.address.clone(),
+    )?;
+
+    Ok(Response::new()
+        .add_message(mint)
+        .add_message(withdraw)
+        .add_messages(calls.into_iter().map(|call| {
+            wasm_execute(
+                call.subscription.clone(),
+                &SubExecuteMsg::CloseCapitalCall { is_retroactive },
+                coins(
+                    state.capital_to_shares(transactions.get(&call.subscription).unwrap().clone())
+                        as u128,
+                    state.investment_denom.clone(),
+                ),
+            )
+            .unwrap()
+        })))
 }
 
 #[cfg(test)]
@@ -214,14 +220,18 @@ mod tests {
         )
         .unwrap();
 
-        // verify that withdraw and execute messages are sent
-        assert_eq!(2, res.messages.len());
+        // verify that mint, withdraw, and execute messages are sent
+        assert_eq!(3, res.messages.len());
         assert!(matches!(
             marker_msg(msg_at_index(&res, 0)),
+            MarkerMsgParams::MintMarkerSupply { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 1)),
             MarkerMsgParams::WithdrawCoins { .. }
         ));
         assert!(matches!(
-            wasm_msg(msg_at_index(&res, 1)),
+            wasm_msg(msg_at_index(&res, 2)),
             WasmMsg::Execute { .. }
         ));
     }
