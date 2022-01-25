@@ -276,6 +276,86 @@ mod tests {
     }
 
     #[test]
+    fn accept_subscription_bad_actor() {
+        let mut deps = mock_sub_terms();
+
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        config(&mut deps.storage).save(&state).unwrap();
+
+        // accept pending sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::AcceptSubscriptions {
+                subscriptions: vec![AcceptSubscription {
+                    subscription: Addr::unchecked("sub_1"),
+                    commitment: 20_000,
+                    is_retroactive: false,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
+    fn accept_subscription_missing_acceptable_accreditation() {
+        let mut deps = mock_sub_terms();
+
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        state.acceptable_accreditations = vec![String::from("506c")].into_iter().collect();
+        config(&mut deps.storage).save(&state).unwrap();
+
+        // accept pending sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::AcceptSubscriptions {
+                subscriptions: vec![AcceptSubscription {
+                    subscription: Addr::unchecked("sub_1"),
+                    commitment: 20_000,
+                    is_retroactive: false,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
+    fn accept_subscription_missing_required_tag() {
+        let mut deps = mock_sub_terms();
+
+        let mut state = State::test_default();
+        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        state.other_required_tags = vec![String::from("misc")].into_iter().collect();
+        config(&mut deps.storage).save(&state).unwrap();
+
+        // accept pending sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::AcceptSubscriptions {
+                subscriptions: vec![AcceptSubscription {
+                    subscription: Addr::unchecked("sub_1"),
+                    commitment: 20_000,
+                    is_retroactive: false,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
     fn accept_subscription_with_bad_amount() {
         let mut deps = mock_sub_terms();
 
