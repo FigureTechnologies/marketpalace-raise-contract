@@ -1,5 +1,5 @@
+use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::error::ContractError;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
 use crate::state::{State, Status};
@@ -18,7 +18,7 @@ pub fn instantiate(
     env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = State {
         subscription_code_id: msg.subscription_code_id,
         status: Status::Active,

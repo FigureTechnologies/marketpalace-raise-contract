@@ -1,4 +1,5 @@
 use crate::error::contract_error;
+use crate::recover::try_recover;
 use cosmwasm_std::{
     coin, coins, entry_point, to_binary, wasm_execute, Addr, Attribute, BankMsg, ContractResult,
     CosmosMsg, Deps, DepsMut, Env, Event, MessageInfo, Reply, ReplyOn, Response, StdResult, SubMsg,
@@ -16,6 +17,8 @@ use crate::sub::{
     SubCapitalCallIssuance, SubExecuteMsg, SubInstantiateMsg, SubQueryMsg, SubTerms,
     SubTransactions,
 };
+
+pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
 #[entry_point]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
@@ -48,12 +51,7 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
 
 // And declare a custom Error variant for the ones where you will want to make use of it
 #[entry_point]
-pub fn execute(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    msg: HandleMsg,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> ContractResponse {
     match msg {
         HandleMsg::Recover { gp } => try_recover(deps, info, gp),
         HandleMsg::ProposeSubscription {
@@ -90,25 +88,6 @@ pub fn execute(
     }
 }
 
-pub fn try_recover(
-    deps: DepsMut,
-    info: MessageInfo,
-    gp: Addr,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.recovery_admin {
-        return contract_error("only admin can recover raise");
-    }
-
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.gp = gp;
-        Ok(state)
-    })?;
-
-    Ok(Response::default())
-}
-
 pub fn try_propose_subscription(
     deps: DepsMut,
     env: Env,
@@ -116,7 +95,7 @@ pub fn try_propose_subscription(
     min_commitment: u64,
     max_commitment: u64,
     min_days_of_notice: Option<u16>,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if state.status != Status::Active {
@@ -164,7 +143,7 @@ pub fn try_accept_subscriptions(
     env: Env,
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -261,7 +240,7 @@ pub fn try_issue_calls(
     deps: DepsMut,
     info: MessageInfo,
     calls: HashSet<CallIssuance>,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -296,7 +275,7 @@ pub fn try_close_calls(
     info: MessageInfo,
     calls: HashSet<CallClosure>,
     is_retroactive: bool,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -344,7 +323,7 @@ pub fn try_issue_redemptions(
     info: MessageInfo,
     redemptions: HashSet<Redemption>,
     is_retroactive: bool,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -380,7 +359,7 @@ pub fn try_issue_distributions(
     info: MessageInfo,
     distributions: HashSet<Distribution>,
     is_retroactive: bool,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -417,7 +396,7 @@ pub fn try_issue_withdrawal(
     to: Addr,
     amount: u64,
     memo: Option<String>,
-) -> Result<Response<ProvenanceMsg>, ContractError> {
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
@@ -463,7 +442,7 @@ pub fn try_issue_withdrawal(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::QueryMsg;
@@ -475,7 +454,7 @@ mod tests {
     use cosmwasm_std::{from_binary, Addr, MemoryStorage, OwnedDeps, SystemResult};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
-    fn default_deps(
+    pub fn default_deps(
         update_state: Option<fn(&mut State)>,
     ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier> {
         let mut deps = mock_dependencies(&[]);
@@ -502,44 +481,6 @@ mod tests {
                 .unwrap(),
             ))
         })
-    }
-
-    #[test]
-    fn recover() {
-        let mut deps = default_deps(None);
-
-        execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("marketpalace", &vec![]),
-            HandleMsg::Recover {
-                gp: Addr::unchecked("gp_2"),
-            },
-        )
-        .unwrap();
-
-        // verify that gp has been updated
-        let state = config_read(&deps.storage).load().unwrap();
-        assert_eq!("gp_2", state.gp);
-    }
-
-    #[test]
-    fn fail_bad_actor_recover() {
-        let mut deps = default_deps(None);
-
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bad_actor", &vec![]),
-            HandleMsg::Recover {
-                gp: Addr::unchecked("bad_actor"),
-            },
-        );
-        assert_eq!(true, res.is_err());
-
-        // verify that gp has NOT been updated
-        let state = config_read(&deps.storage).load().unwrap();
-        assert_eq!("gp", state.gp);
     }
 
     #[test]
