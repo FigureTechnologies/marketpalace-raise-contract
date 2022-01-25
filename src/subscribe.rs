@@ -51,7 +51,7 @@ pub fn try_propose_subscription(
     }
 
     let create_sub = SubMsg::reply_always(
-        CosmosMsg::Wasm(WasmMsg::Instantiate {
+        WasmMsg::Instantiate {
             admin: Some(env.contract.address.into_string()),
             code_id: state.subscription_code_id,
             msg: to_binary(&SubInstantiateMsg {
@@ -65,7 +65,7 @@ pub fn try_propose_subscription(
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
-        }),
+        },
         1,
     );
 
@@ -203,6 +203,43 @@ mod tests {
         )
         .unwrap();
         assert_eq!(1, res.messages.len());
+    }
+
+    #[test]
+    fn propose_subscription_with_max_too_small() {
+        let mut deps = default_deps(None);
+
+        // propose a sub as lp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("lp", &[]),
+            HandleMsg::ProposeSubscription {
+                min_commitment: 10_000,
+                max_commitment: 5_000,
+                min_days_of_notice: None,
+            },
+        );
+        assert_eq!(true, res.is_err());
+    }
+
+    #[test]
+
+    fn propose_subscription_with_min_too_big() {
+        let mut deps = default_deps(None);
+
+        // propose a sub as lp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("lp", &[]),
+            HandleMsg::ProposeSubscription {
+                min_commitment: 110_000,
+                max_commitment: 100_000,
+                min_days_of_notice: None,
+            },
+        );
+        assert_eq!(true, res.is_err());
     }
 
     #[test]

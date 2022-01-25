@@ -45,7 +45,6 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
     })
 }
 
-// And declare a custom Error variant for the ones where you will want to make use of it
 #[entry_point]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> ContractResponse {
     match msg {
