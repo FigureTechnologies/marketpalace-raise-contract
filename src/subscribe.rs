@@ -176,6 +176,9 @@ mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
     use crate::contract::tests::mock_sub_terms;
+    use crate::mock::marker_msg;
+    use crate::mock::msg_at_index;
+    use crate::mock::wasm_msg;
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
     use crate::msg::Subs;
@@ -184,6 +187,7 @@ mod tests {
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
+    use provwasm_std::MarkerMsgParams;
 
     #[test]
 
@@ -266,7 +270,17 @@ mod tests {
             },
         )
         .unwrap();
+
+        // verify that withdraw and exec message was sent
         assert_eq!(2, res.messages.len());
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 0)),
+            MarkerMsgParams::WithdrawCoins { .. }
+        ));
+        assert!(matches!(
+            wasm_msg(msg_at_index(&res, 1)),
+            WasmMsg::Execute { .. }
+        ));
 
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
