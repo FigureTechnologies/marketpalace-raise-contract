@@ -1,8 +1,13 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
+use cosmwasm_std::CosmosMsg;
+use cosmwasm_std::Response;
 use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
 };
+use provwasm_std::MarkerMsgParams;
+use provwasm_std::ProvenanceMsg;
+use provwasm_std::ProvenanceMsgParams;
 
 use provwasm_mocks::ProvenanceMockQuerier;
 use provwasm_std::ProvenanceQuery;
@@ -49,5 +54,21 @@ pub fn wasm_smart_mock_dependencies(
             base,
             wasm_smart_handler,
         },
+    }
+}
+
+pub fn msg_at_index(res: &Response<ProvenanceMsg>, i: usize) -> &CosmosMsg<ProvenanceMsg> {
+    &res.messages.get(i).unwrap().msg
+}
+
+pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
+    if let CosmosMsg::Custom(msg) = msg {
+        if let ProvenanceMsgParams::Marker(params) = &msg.params {
+            params
+        } else {
+            panic!("not a marker message!")
+        }
+    } else {
+        panic!("not a provenance message!")
     }
 }

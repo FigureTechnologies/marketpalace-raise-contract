@@ -87,12 +87,15 @@ pub fn instantiate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mock::marker_msg;
+    use crate::mock::msg_at_index;
     use crate::msg::QueryMsg;
     use crate::msg::Terms;
     use crate::query::query;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{from_binary, Addr};
     use provwasm_mocks::mock_dependencies;
+    use provwasm_std::MarkerMsgParams;
 
     #[test]
     fn initialization() {
@@ -117,7 +120,41 @@ mod tests {
             },
         )
         .unwrap();
+
+        // verify that 8 messages are sent to configure 2 new markers
         assert_eq!(8, res.messages.len());
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 0)),
+            MarkerMsgParams::CreateMarker { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 1)),
+            MarkerMsgParams::GrantMarkerAccess { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 2)),
+            MarkerMsgParams::FinalizeMarker { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 3)),
+            MarkerMsgParams::ActivateMarker { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 4)),
+            MarkerMsgParams::CreateMarker { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 5)),
+            MarkerMsgParams::GrantMarkerAccess { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 6)),
+            MarkerMsgParams::FinalizeMarker { .. }
+        ));
+        assert!(matches!(
+            marker_msg(msg_at_index(&res, 7)),
+            MarkerMsgParams::ActivateMarker { .. }
+        ));
 
         // verify raise is in active status
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
