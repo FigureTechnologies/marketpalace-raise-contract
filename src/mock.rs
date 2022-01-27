@@ -101,7 +101,7 @@ pub fn withdraw_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Coin, &Addr) 
     {
         (marker_denom, coin, recipient)
     } else {
-        panic!("not a mint marker message!")
+        panic!("not a withdraw marker message!")
     }
 }
 
