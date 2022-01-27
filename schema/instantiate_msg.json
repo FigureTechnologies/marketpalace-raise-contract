@@ -8,8 +8,7 @@
     "capital_per_share",
     "other_required_tags",
     "recovery_admin",
-    "subscription_code_id",
-    "target"
+    "subscription_code_id"
   ],
   "properties": {
     "acceptable_accreditations": {
@@ -54,11 +53,6 @@
       "$ref": "#/definitions/Addr"
     },
     "subscription_code_id": {
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "target": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0

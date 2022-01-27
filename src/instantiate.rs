@@ -72,7 +72,7 @@ pub fn instantiate(
 
     Ok(Response::default()
         .add_messages(create_and_activate_marker(state.commitment_denom.clone())?)
-        .add_messages(create_and_activate_marker(state.investment_denom.clone())?))
+        .add_messages(create_and_activate_marker(state.investment_denom)?))
 }
 
 #[cfg(test)]

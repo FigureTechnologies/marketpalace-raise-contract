@@ -125,7 +125,7 @@ pub fn try_accept_subscriptions(
         state.commitment_denom.clone(),
         supply.into(),
         state.commitment_denom.clone(),
-        env.contract.address.clone(),
+        env.contract.address,
     )?;
 
     Ok(Response::new()
@@ -171,9 +171,10 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::mock::marker_msg;
+    use crate::mock::mint_args;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
+    use crate::mock::withdraw_args;
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
@@ -190,7 +191,6 @@ mod tests {
     use cosmwasm_std::MemoryStorage;
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
-    use provwasm_std::MarkerMsgParams;
 
     pub fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
         wasm_smart_mock_dependencies(&vec![], |_, _| {
@@ -291,14 +291,19 @@ mod tests {
 
         // verify that mint, withdraw, and exec message was sent
         assert_eq!(3, res.messages.len());
-        assert!(matches!(
-            marker_msg(msg_at_index(&res, 0)),
-            MarkerMsgParams::MintMarkerSupply { .. }
-        ));
-        assert!(matches!(
-            marker_msg(msg_at_index(&res, 1)),
-            MarkerMsgParams::WithdrawCoins { .. }
-        ));
+
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(200, mint.amount.u128());
+        assert_eq!("commitment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", marker_denom);
+        assert_eq!(200, coin.amount.u128());
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!("cosmos2contract", recipient.clone().into_string());
+
         assert!(matches!(
             wasm_msg(msg_at_index(&res, 2)),
             WasmMsg::Execute { .. }

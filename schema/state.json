@@ -16,8 +16,7 @@
     "recovery_admin",
     "sequence",
     "status",
-    "subscription_code_id",
-    "target"
+    "subscription_code_id"
   ],
   "properties": {
     "acceptable_accreditations": {
@@ -100,11 +99,6 @@
       "$ref": "#/definitions/Status"
     },
     "subscription_code_id": {
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "target": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0

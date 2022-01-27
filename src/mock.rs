@@ -1,4 +1,5 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
+use cosmwasm_std::Addr;
 use cosmwasm_std::BankMsg;
 use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Response;
@@ -80,6 +81,27 @@ pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
         }
     } else {
         panic!("not a cosmos custom message!")
+    }
+}
+
+pub fn mint_args(msg: &CosmosMsg<ProvenanceMsg>) -> &Coin {
+    if let MarkerMsgParams::MintMarkerSupply { coin } = marker_msg(msg) {
+        coin
+    } else {
+        panic!("not a mint marker message!")
+    }
+}
+
+pub fn withdraw_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Coin, &Addr) {
+    if let MarkerMsgParams::WithdrawCoins {
+        marker_denom,
+        coin,
+        recipient,
+    } = marker_msg(msg)
+    {
+        (marker_denom, coin, recipient)
+    } else {
+        panic!("not a mint marker message!")
     }
 }
 

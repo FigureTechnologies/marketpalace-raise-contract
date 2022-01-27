@@ -79,7 +79,7 @@ pub fn try_close_calls(
         state.investment_denom.clone(),
         supply.into(),
         state.investment_denom.clone(),
-        env.contract.address.clone(),
+        env.contract.address,
     )?;
 
     Ok(Response::new()
@@ -90,8 +90,7 @@ pub fn try_close_calls(
                 call.subscription.clone(),
                 &SubExecuteMsg::CloseCapitalCall { is_retroactive },
                 coins(
-                    state.capital_to_shares(transactions.get(&call.subscription).unwrap().clone())
-                        as u128,
+                    state.capital_to_shares(*transactions.get(&call.subscription).unwrap()) as u128,
                     state.investment_denom.clone(),
                 ),
             )
@@ -103,10 +102,11 @@ pub fn try_close_calls(
 mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::mock::marker_msg;
+    use crate::mock::mint_args;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
     use crate::mock::wasm_smart_mock_dependencies;
+    use crate::mock::withdraw_args;
     use crate::msg::CallClosure;
     use crate::msg::CallIssuance;
     use crate::msg::HandleMsg;
@@ -122,7 +122,6 @@ mod tests {
     use cosmwasm_std::ContractResult;
     use cosmwasm_std::SystemResult;
     use cosmwasm_std::WasmMsg;
-    use provwasm_std::MarkerMsgParams;
     use std::collections::HashSet;
 
     #[test]
@@ -222,14 +221,19 @@ mod tests {
 
         // verify that mint, withdraw, and execute messages are sent
         assert_eq!(3, res.messages.len());
-        assert!(matches!(
-            marker_msg(msg_at_index(&res, 0)),
-            MarkerMsgParams::MintMarkerSupply { .. }
-        ));
-        assert!(matches!(
-            marker_msg(msg_at_index(&res, 1)),
-            MarkerMsgParams::WithdrawCoins { .. }
-        ));
+
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(100, mint.amount.u128());
+        assert_eq!("investment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("investment_coin", marker_denom);
+        assert_eq!(100, coin.amount.u128());
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!("cosmos2contract", recipient.clone().into_string());
+
         assert!(matches!(
             wasm_msg(msg_at_index(&res, 2)),
             WasmMsg::Execute { .. }
