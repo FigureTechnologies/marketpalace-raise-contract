@@ -10,7 +10,6 @@ use cosmwasm_std::coins;
 use cosmwasm_std::to_binary;
 use cosmwasm_std::wasm_execute;
 use cosmwasm_std::Addr;
-use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
@@ -19,8 +18,8 @@ use cosmwasm_std::Response;
 use cosmwasm_std::StdResult;
 use cosmwasm_std::SubMsg;
 use cosmwasm_std::WasmMsg;
+use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
-use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceQuerier;
 use std::collections::HashSet;
 
@@ -119,33 +118,30 @@ pub fn try_accept_subscriptions(
         Ok(state)
     })?;
 
-    let withdrawals_and_acceptances: Vec<CosmosMsg<ProvenanceMsg>> = accepts
-        .into_iter()
-        .flat_map(|accept| {
-            vec![
-                withdraw_coins(
-                    state.commitment_denom.clone(),
+    let commitment_total: u64 = accepts.iter().map(|accept| accept.commitment).sum();
+    let supply = state.capital_to_shares(commitment_total);
+    let mint = mint_marker_supply(supply.into(), state.commitment_denom.clone())?;
+    let withdraw = withdraw_coins(
+        state.commitment_denom.clone(),
+        supply.into(),
+        state.commitment_denom.clone(),
+        env.contract.address,
+    )?;
+
+    Ok(Response::new()
+        .add_message(mint)
+        .add_message(withdraw)
+        .add_messages(accepts.into_iter().map(|accept| {
+            wasm_execute(
+                accept.subscription,
+                &SubExecuteMsg::Accept {},
+                coins(
                     state.capital_to_shares(accept.commitment) as u128,
                     state.commitment_denom.clone(),
-                    env.contract.address.clone(),
-                )
-                .unwrap(),
-                CosmosMsg::Wasm(
-                    wasm_execute(
-                        accept.subscription,
-                        &SubExecuteMsg::Accept {},
-                        coins(
-                            state.capital_to_shares(accept.commitment) as u128,
-                            state.commitment_denom.clone(),
-                        ),
-                    )
-                    .unwrap(),
                 ),
-            ]
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(withdrawals_and_acceptances))
+            )
+            .unwrap()
+        })))
 }
 
 fn get_attributes(deps: Deps, address: Addr) -> StdResult<HashSet<String>> {
@@ -175,9 +171,10 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::mock::marker_msg;
+    use crate::mock::mint_args;
     use crate::mock::msg_at_index;
     use crate::mock::wasm_msg;
+    use crate::mock::withdraw_args;
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
@@ -194,7 +191,6 @@ mod tests {
     use cosmwasm_std::MemoryStorage;
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
-    use provwasm_std::MarkerMsgParams;
 
     pub fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
         wasm_smart_mock_dependencies(&vec![], |_, _| {
@@ -293,14 +289,23 @@ mod tests {
         )
         .unwrap();
 
-        // verify that withdraw and exec message was sent
-        assert_eq!(2, res.messages.len());
+        // verify that mint, withdraw, and exec message was sent
+        assert_eq!(3, res.messages.len());
+
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(200, mint.amount.u128());
+        assert_eq!("commitment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", marker_denom);
+        assert_eq!(200, coin.amount.u128());
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!("cosmos2contract", recipient.clone().into_string());
+
         assert!(matches!(
-            marker_msg(msg_at_index(&res, 0)),
-            MarkerMsgParams::WithdrawCoins { .. }
-        ));
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 1)),
+            wasm_msg(msg_at_index(&res, 2)),
             WasmMsg::Execute { .. }
         ));
 
