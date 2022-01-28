@@ -3,7 +3,10 @@ use crate::error::contract_error;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
 use crate::state::{State, Status};
+use crate::version::CONTRACT_NAME;
+use crate::version::CONTRACT_VERSION;
 use cosmwasm_std::{entry_point, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdResult};
+use cw2::set_contract_version;
 use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
     ProvenanceMsg,
@@ -19,6 +22,8 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> ContractResponse {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     let state = State {
         subscription_code_id: msg.subscription_code_id,
         status: Status::Active,
