@@ -112,3 +112,16 @@ pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
         panic!("not a cosmos wasm message")
     }
 }
+
+pub fn execute_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Binary, &Vec<Coin>) {
+    if let WasmMsg::Execute {
+        contract_addr,
+        msg,
+        funds,
+    } = wasm_msg(msg)
+    {
+        (contract_addr, msg, funds)
+    } else {
+        panic!("not a wasm execute message")
+    }
+}
