@@ -5,7 +5,7 @@ use crate::recover::try_recover;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_propose_subscription;
 use cosmwasm_std::{
-    coin, entry_point, wasm_execute, Addr, Attribute, BankMsg, ContractResult, CosmosMsg, DepsMut,
+    coins, entry_point, wasm_execute, Addr, Attribute, BankMsg, ContractResult, CosmosMsg, DepsMut,
     Env, Event, MessageInfo, Reply, Response,
 };
 use provwasm_std::ProvenanceMsg;
@@ -108,10 +108,11 @@ pub fn try_issue_redemptions(
                         payment: redemption.capital,
                         is_retroactive,
                     },
-                    vec![coin(
-                        redemption.capital as u128,
-                        state.capital_denom.clone(),
-                    )],
+                    if is_retroactive {
+                        vec![]
+                    } else {
+                        coins(redemption.capital as u128, state.capital_denom.clone())
+                    },
                 )
                 .unwrap(),
             )
@@ -143,10 +144,11 @@ pub fn try_issue_distributions(
                         payment: distribution.amount,
                         is_retroactive,
                     },
-                    vec![coin(
-                        distribution.amount as u128,
-                        state.capital_denom.clone(),
-                    )],
+                    if is_retroactive {
+                        vec![]
+                    } else {
+                        coins(distribution.amount as u128, state.capital_denom.clone())
+                    },
                 )
                 .unwrap(),
             )
@@ -184,7 +186,7 @@ pub fn try_issue_withdrawal(
 
     let send = BankMsg::Send {
         to_address: to.to_string(),
-        amount: vec![coin(amount as u128, state.capital_denom)],
+        amount: coins(amount as u128, state.capital_denom),
     };
 
     let sequence_attribute = Attribute {
@@ -212,11 +214,11 @@ pub fn try_issue_withdrawal(
 pub mod tests {
     use super::*;
     use crate::mock::bank_msg;
+    use crate::mock::execute_args;
     use crate::mock::msg_at_index;
-    use crate::mock::wasm_msg;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
-    use cosmwasm_std::{Addr, OwnedDeps, WasmMsg};
+    use cosmwasm_std::{Addr, OwnedDeps};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     pub fn default_deps(
@@ -240,7 +242,7 @@ pub mod tests {
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &[coin(10_000, "stable_coin")]),
+            mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::IssueRedemptions {
                 redemptions: vec![Redemption {
                     subscription: Addr::unchecked("sub_1"),
@@ -256,10 +258,35 @@ pub mod tests {
 
         // verify execute message sent
         assert_eq!(1, res.messages.len());
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 0)),
-            WasmMsg::Execute { .. }
-        ));
+        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
+        assert_eq!(1, funds.len());
+    }
+
+    #[test]
+    fn issue_redemptions_retroactive() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::IssueRedemptions {
+                redemptions: vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    asset: 10_000,
+                    capital: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: true,
+            },
+        )
+        .unwrap();
+
+        // verify execute message sent
+        assert_eq!(1, res.messages.len());
+        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
+        assert_eq!(0, funds.len());
     }
 
     #[test]
@@ -269,7 +296,7 @@ pub mod tests {
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("bad_actor", &[coin(10_000, "stable_coin")]),
+            mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueRedemptions {
                 redemptions: vec![Redemption {
                     subscription: Addr::unchecked("sub_1"),
@@ -291,7 +318,7 @@ pub mod tests {
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &[coin(10_000, "stable_coin")]),
+            mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::IssueDistributions {
                 distributions: vec![Distribution {
                     subscription: Addr::unchecked("sub_1"),
@@ -306,10 +333,34 @@ pub mod tests {
 
         // verify execute message sent
         assert_eq!(1, res.messages.len());
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 0)),
-            WasmMsg::Execute { .. }
-        ));
+        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
+        assert_eq!(1, funds.len());
+    }
+
+    #[test]
+    fn issue_distributions_retroactive() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::IssueDistributions {
+                distributions: vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+                is_retroactive: true,
+            },
+        )
+        .unwrap();
+
+        // verify execute message sent
+        assert_eq!(1, res.messages.len());
+        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
+        assert_eq!(0, funds.len());
     }
 
     #[test]
@@ -319,7 +370,7 @@ pub mod tests {
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("bad_actor", &[coin(10_000, "stable_coin")]),
+            mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueDistributions {
                 distributions: vec![Distribution {
                     subscription: Addr::unchecked("sub_1"),
