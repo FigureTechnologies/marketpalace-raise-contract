@@ -16,11 +16,12 @@ use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
 use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
+use provwasm_std::ProvenanceQuery;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
 pub fn try_issue_calls(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     calls: HashSet<CallIssuance>,
 ) -> ContractResponse {
@@ -46,7 +47,7 @@ pub fn try_issue_calls(
 }
 
 pub fn try_close_calls(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
     calls: HashSet<CallClosure>,

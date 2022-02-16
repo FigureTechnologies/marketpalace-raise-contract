@@ -9,6 +9,7 @@ use cosmwasm_std::{
     Env, Event, MessageInfo, Reply, Response,
 };
 use provwasm_std::ProvenanceMsg;
+use provwasm_std::ProvenanceQuery;
 use std::collections::HashSet;
 
 use crate::error::ContractError;
@@ -48,7 +49,12 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
 }
 
 #[entry_point]
-pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> ContractResponse {
+pub fn execute(
+    deps: DepsMut<ProvenanceQuery>,
+    env: Env,
+    info: MessageInfo,
+    msg: HandleMsg,
+) -> ContractResponse {
     match msg {
         HandleMsg::Recover { gp } => try_recover(deps, info, gp),
         HandleMsg::ProposeSubscription {
@@ -86,7 +92,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> Co
 }
 
 pub fn try_issue_redemptions(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     redemptions: HashSet<Redemption>,
     is_retroactive: bool,
@@ -123,7 +129,7 @@ pub fn try_issue_redemptions(
 }
 
 pub fn try_issue_distributions(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     distributions: HashSet<Distribution>,
     is_retroactive: bool,
@@ -159,7 +165,7 @@ pub fn try_issue_distributions(
 }
 
 pub fn try_issue_withdrawal(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     env: Env,
     to: Addr,
@@ -223,7 +229,7 @@ pub mod tests {
 
     pub fn default_deps(
         update_state: Option<fn(&mut State)>,
-    ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier> {
+    ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier, ProvenanceQuery> {
         let mut deps = mock_dependencies(&[]);
 
         let mut state = State::test_default();

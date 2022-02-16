@@ -21,10 +21,11 @@ use cosmwasm_std::WasmMsg;
 use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
 use provwasm_std::ProvenanceQuerier;
+use provwasm_std::ProvenanceQuery;
 use std::collections::HashSet;
 
 pub fn try_propose_subscription(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
     min_commitment: u64,
@@ -72,7 +73,7 @@ pub fn try_propose_subscription(
 }
 
 pub fn try_accept_subscriptions(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
@@ -144,7 +145,7 @@ pub fn try_accept_subscriptions(
         })))
 }
 
-fn get_attributes(deps: Deps, address: Addr) -> StdResult<HashSet<String>> {
+fn get_attributes(deps: Deps<ProvenanceQuery>, address: Addr) -> StdResult<HashSet<String>> {
     let terms: SubTerms = deps
         .querier
         .query_wasm_smart(address, &SubQueryMsg::GetTerms {})?;
@@ -192,7 +193,8 @@ mod tests {
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
 
-    pub fn mock_sub_terms() -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier> {
+    pub fn mock_sub_terms(
+    ) -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
         wasm_smart_mock_dependencies(&vec![], |_, _| {
             SystemResult::Ok(ContractResult::Ok(
                 to_binary(&SubTerms {

@@ -7,6 +7,7 @@ use crate::version::CONTRACT_NAME;
 use crate::version::CONTRACT_VERSION;
 use cosmwasm_std::{entry_point, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
+use provwasm_std::ProvenanceQuery;
 use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
     ProvenanceMsg,
@@ -17,7 +18,7 @@ use std::collections::HashSet;
 // make use of the custom errors
 #[entry_point]
 pub fn instantiate(
-    deps: DepsMut,
+    deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,

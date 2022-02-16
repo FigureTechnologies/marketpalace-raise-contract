@@ -1,10 +1,11 @@
 use cosmwasm_std::{entry_point, to_binary, Binary, Deps, Env, StdResult};
+use provwasm_std::ProvenanceQuery;
 
 use crate::msg::{QueryMsg, Subs, Terms, Transactions};
 use crate::state::config_read;
 
 #[entry_point]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps<ProvenanceQuery>, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let state = config_read(deps.storage).load()?;
 
     match msg {

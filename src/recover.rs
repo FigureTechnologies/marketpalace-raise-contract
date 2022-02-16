@@ -7,8 +7,13 @@ use cosmwasm_std::Addr;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
+use provwasm_std::ProvenanceQuery;
 
-pub fn try_recover(deps: DepsMut, info: MessageInfo, gp: Addr) -> ContractResponse {
+pub fn try_recover(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    gp: Addr,
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.recovery_admin {

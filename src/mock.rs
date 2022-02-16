@@ -11,6 +11,7 @@ use cosmwasm_std::{
 use provwasm_std::MarkerMsgParams;
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceMsgParams;
+use std::marker::PhantomData;
 
 use provwasm_mocks::ProvenanceMockQuerier;
 use provwasm_std::ProvenanceQuery;
@@ -46,7 +47,7 @@ impl Querier for MockContractQuerier {
 pub fn wasm_smart_mock_dependencies(
     contract_balance: &[Coin],
     wasm_smart_handler: MockWasmSmartHandler,
-) -> OwnedDeps<MockStorage, MockApi, MockContractQuerier> {
+) -> OwnedDeps<MockStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
     let base =
         ProvenanceMockQuerier::new(MockQuerier::new(&[(MOCK_CONTRACT_ADDR, contract_balance)]));
 
@@ -57,6 +58,7 @@ pub fn wasm_smart_mock_dependencies(
             base,
             wasm_smart_handler,
         },
+        custom_query_type: PhantomData,
     }
 }
 
