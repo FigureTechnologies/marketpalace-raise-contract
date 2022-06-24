@@ -164,7 +164,23 @@
       ],
       "properties": {
         "claim_redemption": {
-          "type": "object"
+          "type": "object",
+          "required": [
+            "asset",
+            "capital"
+          ],
+          "properties": {
+            "asset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "capital": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
         }
       },
       "additionalProperties": false
@@ -199,7 +215,17 @@
       ],
       "properties": {
         "claim_distribution": {
-          "type": "object"
+          "type": "object",
+          "required": [
+            "amount"
+          ],
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
         }
       },
       "additionalProperties": false

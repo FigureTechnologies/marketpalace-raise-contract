@@ -48,11 +48,16 @@ pub enum HandleMsg {
     IssueRedemptions {
         redemptions: Vec<Redemption>,
     },
-    ClaimRedemption {},
+    ClaimRedemption {
+        asset: u64,
+        capital: u64,
+    },
     IssueDistributions {
         distributions: Vec<Distribution>,
     },
-    ClaimDistribution {},
+    ClaimDistribution {
+        amount: u64,
+    },
     IssueWithdrawal {
         to: Addr,
         amount: u64,

@@ -10,7 +10,7 @@ use crate::msg::{Distribution, Redemption};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 pub static REDEMPTIONS_KEY: &[u8] = b"redemptions";
-pub static DISTRIBUTION_KEY: &[u8] = b"distribution";
+pub static DISTRIBUTIONS_KEY: &[u8] = b"distributions";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
@@ -82,7 +82,7 @@ pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<Vec<Redem
 }
 
 pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<Vec<Distribution>> {
-    singleton(storage, DISTRIBUTION_KEY)
+    singleton(storage, DISTRIBUTIONS_KEY)
 }
 
 #[cfg(test)]

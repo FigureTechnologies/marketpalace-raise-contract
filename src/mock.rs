@@ -1,9 +1,9 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
-use cosmwasm_std::Addr;
 use cosmwasm_std::BankMsg;
 use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Response;
 use cosmwasm_std::WasmMsg;
+use cosmwasm_std::{from_binary, Addr};
 use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
@@ -11,6 +11,7 @@ use cosmwasm_std::{
 use provwasm_std::MarkerMsgParams;
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceMsgParams;
+use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
 use provwasm_mocks::ProvenanceMockQuerier;
@@ -123,14 +124,16 @@ pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
     }
 }
 
-pub fn execute_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Binary, &Vec<Coin>) {
+pub fn execute_args<T: DeserializeOwned>(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> (&String, T, &Vec<Coin>) {
     if let WasmMsg::Execute {
         contract_addr,
         msg,
         funds,
     } = wasm_msg(msg)
     {
-        (contract_addr, msg, funds)
+        (contract_addr, from_binary::<T>(msg).unwrap(), funds)
     } else {
         panic!("not a wasm execute message")
     }

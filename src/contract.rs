@@ -80,11 +80,13 @@ pub fn execute(
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
-        HandleMsg::ClaimRedemption {} => try_claim_redemption(deps, info),
+        HandleMsg::ClaimRedemption { asset, capital } => {
+            try_claim_redemption(deps, info, asset, capital)
+        }
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
-        HandleMsg::ClaimDistribution {} => try_claim_distribution(deps, info),
+        HandleMsg::ClaimDistribution { amount } => try_claim_distribution(deps, info, amount),
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)
         }
@@ -111,18 +113,36 @@ pub fn try_issue_redemptions(
     Ok(Response::default())
 }
 
-pub fn try_claim_redemption(deps: DepsMut<ProvenanceQuery>, info: MessageInfo) -> ContractResponse {
+pub fn try_claim_redemption(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    asset: u64,
+    capital: u64,
+) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     let mut redemptions = outstanding_redemptions(deps.storage).load()?;
     let redemption = if let Some(index) = redemptions
         .iter()
-        .position(|it| it.subscription == info.sender)
+        .position(|it| it.subscription == info.sender && it.asset == asset && it.capital == capital)
     {
         redemptions.remove(index)
     } else {
         return contract_error("no redemption for subscription");
     };
+
+    let sent = match info.funds.first() {
+        Some(sent) => sent,
+        None => return contract_error("asset required for redemption"),
+    };
+
+    if sent.denom != state.investment_denom {
+        return contract_error("payment should be made in investment denom");
+    }
+
+    if sent.amount.u128() != redemption.asset.into() {
+        return contract_error("sent funds should match specified asset");
+    }
 
     outstanding_redemptions(deps.storage).save(&redemptions)?;
 
@@ -157,13 +177,14 @@ pub fn try_issue_distributions(
 pub fn try_claim_distribution(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
+    amount: u64,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     let mut distributions = outstanding_distributions(deps.storage).load()?;
     let distribution = if let Some(index) = distributions
         .iter()
-        .position(|it| it.subscription == info.sender)
+        .position(|it| it.subscription == info.sender && it.amount == amount)
     {
         distributions.remove(index)
     } else {
@@ -328,8 +349,11 @@ pub mod tests {
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("sub_1", &vec![]),
-            HandleMsg::ClaimRedemption {},
+            mock_info("sub_1", &coins(5_000, "investment_coin")),
+            HandleMsg::ClaimRedemption {
+                asset: 5_000,
+                capital: 10_000,
+            },
         )
         .unwrap();
 
@@ -347,6 +371,30 @@ pub mod tests {
                 .unwrap()
                 .len()
         )
+    }
+
+    #[test]
+    fn claim_redemption_without_asset() {
+        let mut deps = default_deps(None);
+        outstanding_redemptions(&mut deps.storage)
+            .save(&vec![Redemption {
+                subscription: Addr::unchecked("sub_1"),
+                capital: 10_000,
+                asset: 5_000,
+            }])
+            .unwrap();
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![]),
+            HandleMsg::ClaimRedemption {
+                asset: 5_000,
+                capital: 10_000,
+            },
+        );
+
+        assert!(res.is_err());
     }
 
     #[test]
@@ -418,7 +466,7 @@ pub mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("sub_1", &vec![]),
-            HandleMsg::ClaimDistribution {},
+            HandleMsg::ClaimDistribution { amount: 10_000 },
         )
         .unwrap();
 
