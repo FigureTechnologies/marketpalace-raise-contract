@@ -75,7 +75,7 @@ pub fn bank_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &BankMsg {
     }
 }
 
-pub fn send_msg(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Vec<Coin>) {
+pub fn send_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Vec<Coin>) {
     if let BankMsg::Send { to_address, amount } = bank_msg(msg) {
         (to_address, amount)
     } else {
@@ -113,6 +113,14 @@ pub fn withdraw_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Coin, &Addr) 
         (marker_denom, coin, recipient)
     } else {
         panic!("not a withdraw marker message!")
+    }
+}
+
+pub fn burn_args(msg: &CosmosMsg<ProvenanceMsg>) -> &Coin {
+    if let MarkerMsgParams::BurnMarkerSupply { coin } = marker_msg(msg) {
+        coin
+    } else {
+        panic!("not a mint burn message!")
     }
 }
 

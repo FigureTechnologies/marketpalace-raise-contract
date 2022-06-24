@@ -271,7 +271,7 @@ pub fn try_issue_withdrawal(
 pub mod tests {
     use super::*;
     use crate::mock::msg_at_index;
-    use crate::mock::send_msg;
+    use crate::mock::send_args;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
     use cosmwasm_std::{Addr, OwnedDeps};
@@ -375,7 +375,7 @@ pub mod tests {
 
         // verify send message
         assert_eq!(1, res.messages.len());
-        let (to_address, coins) = send_msg(msg_at_index(&res, 0));
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
         assert_eq!("destination", to_address);
         assert_eq!(10_000, coins.first().unwrap().amount.u128());
 
@@ -500,7 +500,7 @@ pub mod tests {
 
         // verify send message
         assert_eq!(1, res.messages.len());
-        let (to_address, coins) = send_msg(msg_at_index(&res, 0));
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
         assert_eq!("destination", to_address);
         assert_eq!(10_000, coins.first().unwrap().amount.u128());
 
@@ -538,7 +538,7 @@ pub mod tests {
 
         // verify that send message is sent
         assert_eq!(1, res.messages.len());
-        let (to_address, coins) = send_msg(msg_at_index(&res, 0));
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
         assert_eq!("omni", to_address);
         assert_eq!(10_000, coins.first().unwrap().amount.u128());
     }

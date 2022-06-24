@@ -117,8 +117,10 @@ pub fn try_claim_investment(
 mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
+    use crate::mock::burn_args;
     use crate::mock::mint_args;
     use crate::mock::msg_at_index;
+    use crate::mock::send_args;
     use crate::mock::withdraw_args;
     use crate::msg::CapitalCall;
     use crate::msg::HandleMsg;
@@ -236,6 +238,21 @@ mod tests {
 
         assert_eq!(3, res.messages.len());
 
-        // todo: verify send investment, deposit commitment, burn commitment
+        // verify send investment
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        assert_eq!("sub_1", to_address);
+        assert_eq!("investment_coin", coins.first().unwrap().denom);
+        assert_eq!(100, coins.first().unwrap().amount.u128());
+
+        // verify deposit commitment
+        let (to_address, coins) = send_args(msg_at_index(&res, 1));
+        assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
+        assert_eq!("commitment_coin", coins.first().unwrap().denom);
+        assert_eq!(100, coins.first().unwrap().amount.u128());
+
+        // verify burn commitment
+        let coin = burn_args(msg_at_index(&res, 2));
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(100, coin.amount.u128());
     }
 }
