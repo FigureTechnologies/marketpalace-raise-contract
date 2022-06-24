@@ -255,4 +255,48 @@ mod tests {
         assert_eq!("commitment_coin", coin.denom);
         assert_eq!(100, coin.amount.u128());
     }
+
+    #[test]
+    fn claim_investment_missing_commitment() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
+            .unwrap();
+
+        // close call
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![coin(10_000, "stable_coin")]),
+            HandleMsg::ClaimInvestment { amount: 10_000 },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn claim_investment_missing_capital() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
+            .unwrap();
+
+        // close call
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![coin(10_000, "commitment_coin")]),
+            HandleMsg::ClaimInvestment { amount: 10_000 },
+        );
+
+        assert!(res.is_err());
+    }
 }
