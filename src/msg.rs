@@ -51,12 +51,16 @@ pub enum HandleMsg {
     ClaimRedemption {
         asset: u64,
         capital: u64,
+        to: Addr,
+        memo: Option<String>,
     },
     IssueDistributions {
         distributions: Vec<Distribution>,
     },
     ClaimDistribution {
         amount: u64,
+        to: Addr,
+        memo: Option<String>,
     },
     IssueWithdrawal {
         to: Addr,

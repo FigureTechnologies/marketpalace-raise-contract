@@ -80,13 +80,18 @@ pub fn execute(
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
-        HandleMsg::ClaimRedemption { asset, capital } => {
-            try_claim_redemption(deps, info, asset, capital)
-        }
+        HandleMsg::ClaimRedemption {
+            asset,
+            capital,
+            to,
+            memo,
+        } => try_claim_redemption(deps, info, asset, capital, to, memo),
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
-        HandleMsg::ClaimDistribution { amount } => try_claim_distribution(deps, info, amount),
+        HandleMsg::ClaimDistribution { amount, to, memo } => {
+            try_claim_distribution(deps, info, amount, to, memo)
+        }
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)
         }
@@ -118,6 +123,8 @@ pub fn try_claim_redemption(
     info: MessageInfo,
     asset: u64,
     capital: u64,
+    to: Addr,
+    memo: Option<String>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -147,11 +154,15 @@ pub fn try_claim_redemption(
     outstanding_redemptions(deps.storage).save(&redemptions)?;
 
     let send = BankMsg::Send {
-        to_address: redemption.subscription.to_string(),
+        to_address: to.into_string(),
         amount: coins(redemption.capital as u128, state.capital_denom),
     };
 
-    Ok(Response::new().add_message(send))
+    let msg = Response::new().add_message(send);
+    Ok(match memo {
+        Some(memo) => msg.add_attribute(String::from("memo"), memo),
+        None => msg,
+    })
 }
 
 pub fn try_issue_distributions(
@@ -178,6 +189,8 @@ pub fn try_claim_distribution(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     amount: u64,
+    to: Addr,
+    memo: Option<String>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -194,11 +207,15 @@ pub fn try_claim_distribution(
     outstanding_distributions(deps.storage).save(&distributions)?;
 
     let send = BankMsg::Send {
-        to_address: distribution.subscription.to_string(),
+        to_address: to.into_string(),
         amount: coins(distribution.amount as u128, state.capital_denom),
     };
 
-    Ok(Response::new().add_message(send))
+    let msg = Response::new().add_message(send);
+    Ok(match memo {
+        Some(memo) => msg.add_attribute(String::from("memo"), memo),
+        None => msg,
+    })
 }
 
 pub fn try_issue_withdrawal(
@@ -353,6 +370,8 @@ pub mod tests {
             HandleMsg::ClaimRedemption {
                 asset: 5_000,
                 capital: 10_000,
+                to: Addr::unchecked("destination"),
+                memo: Some(String::from("note")),
             },
         )
         .unwrap();
@@ -360,10 +379,16 @@ pub mod tests {
         // verify send message
         assert_eq!(1, res.messages.len());
         let (to_address, coins) = send_msg(msg_at_index(&res, 0));
-        assert_eq!("sub_1", to_address);
+        assert_eq!("destination", to_address);
         assert_eq!(10_000, coins.first().unwrap().amount.u128());
 
-        // verify distribution is removed
+        // verify memo
+        assert_eq!(1, res.attributes.len());
+        let attribute = res.attributes.get(0).unwrap();
+        assert_eq!("memo", attribute.key);
+        assert_eq!("note", attribute.value);
+
+        // verify redemption is removed
         assert_eq!(
             1,
             outstanding_redemptions(&mut deps.storage)
@@ -391,6 +416,8 @@ pub mod tests {
             HandleMsg::ClaimRedemption {
                 asset: 5_000,
                 capital: 10_000,
+                to: Addr::unchecked("destination"),
+                memo: Some(String::from("note")),
             },
         );
 
@@ -466,15 +493,25 @@ pub mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("sub_1", &vec![]),
-            HandleMsg::ClaimDistribution { amount: 10_000 },
+            HandleMsg::ClaimDistribution {
+                amount: 10_000,
+                to: Addr::unchecked("destination"),
+                memo: Some(String::from("note")),
+            },
         )
         .unwrap();
 
         // verify send message
         assert_eq!(1, res.messages.len());
         let (to_address, coins) = send_msg(msg_at_index(&res, 0));
-        assert_eq!("sub_1", to_address);
+        assert_eq!("destination", to_address);
         assert_eq!(10_000, coins.first().unwrap().amount.u128());
+
+        // verify memo
+        assert_eq!(1, res.attributes.len());
+        let attribute = res.attributes.get(0).unwrap();
+        assert_eq!("memo", attribute.key);
+        assert_eq!("note", attribute.value);
 
         // verify distribution is removed
         assert_eq!(

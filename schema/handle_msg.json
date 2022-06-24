@@ -167,7 +167,8 @@
           "type": "object",
           "required": [
             "asset",
-            "capital"
+            "capital",
+            "to"
           ],
           "properties": {
             "asset": {
@@ -179,6 +180,15 @@
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
+            },
+            "memo": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "to": {
+              "$ref": "#/definitions/Addr"
             }
           }
         }
@@ -217,13 +227,23 @@
         "claim_distribution": {
           "type": "object",
           "required": [
-            "amount"
+            "amount",
+            "to"
           ],
           "properties": {
             "amount": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
+            },
+            "memo": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "to": {
+              "$ref": "#/definitions/Addr"
             }
           }
         }
