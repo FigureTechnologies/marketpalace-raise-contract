@@ -179,8 +179,7 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Distribution"
-              },
-              "uniqueItems": true
+              }
             },
             "is_retroactive": {
               "type": "boolean"

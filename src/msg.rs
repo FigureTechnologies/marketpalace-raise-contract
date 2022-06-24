@@ -50,9 +50,9 @@ pub enum HandleMsg {
         is_retroactive: bool,
     },
     IssueDistributions {
-        distributions: HashSet<Distribution>,
-        is_retroactive: bool,
+        distributions: Vec<Distribution>,
     },
+    ClaimDistribution {},
     IssueWithdrawal {
         to: Addr,
         amount: u64,

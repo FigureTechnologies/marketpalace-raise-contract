@@ -74,6 +74,14 @@ pub fn bank_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &BankMsg {
     }
 }
 
+pub fn send_msg(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Vec<Coin>) {
+    if let BankMsg::Send { to_address, amount } = bank_msg(msg) {
+        (to_address, amount)
+    } else {
+        panic!("not a send bank message!")
+    }
+}
+
 pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
     if let CosmosMsg::Custom(msg) = msg {
         if let ProvenanceMsgParams::Marker(params) = &msg.params {
