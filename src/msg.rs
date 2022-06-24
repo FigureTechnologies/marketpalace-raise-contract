@@ -39,11 +39,10 @@ pub enum HandleMsg {
         subscriptions: HashSet<AcceptSubscription>,
     },
     IssueCapitalCalls {
-        calls: HashSet<CallIssuance>,
+        calls: Vec<CapitalCall>,
     },
-    CloseCapitalCalls {
-        calls: HashSet<CallClosure>,
-        is_retroactive: bool,
+    ClaimInvestment {
+        amount: u64,
     },
     IssueRedemptions {
         redemptions: Vec<Redemption>,
@@ -92,39 +91,18 @@ impl Hash for AcceptSubscription {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
-pub struct CallIssuance {
+pub struct CapitalCall {
     pub subscription: Addr,
     pub amount: u64,
-    pub days_of_notice: Option<u16>,
 }
 
-impl PartialEq for CallIssuance {
+impl PartialEq for CapitalCall {
     fn eq(&self, other: &Self) -> bool {
         self.subscription == other.subscription
     }
 }
 
-impl Hash for CallIssuance {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.subscription.hash(state);
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
-pub struct CallClosure {
-    pub subscription: Addr,
-}
-
-impl PartialEq for CallClosure {
-    fn eq(&self, other: &Self) -> bool {
-        self.subscription == other.subscription
-    }
-}
-
-impl Hash for CallClosure {
+impl Hash for CapitalCall {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,

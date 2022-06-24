@@ -1,29 +1,25 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::msg::CallClosure;
-use crate::msg::CallIssuance;
+use crate::msg::CapitalCall;
 use crate::state::config_read;
-use crate::sub_msg::SubCapitalCallIssuance;
-use crate::sub_msg::SubExecuteMsg;
-use crate::sub_msg::SubQueryMsg;
-use crate::sub_msg::SubTransactions;
+use crate::state::outstanding_capital_calls;
 use cosmwasm_std::coins;
-use cosmwasm_std::wasm_execute;
-use cosmwasm_std::Addr;
+use cosmwasm_std::BankMsg;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
+use provwasm_std::burn_marker_supply;
 use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
+use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
-use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub fn try_issue_calls(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
-    calls: HashSet<CallIssuance>,
+    mut calls: Vec<CapitalCall>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -31,72 +27,90 @@ pub fn try_issue_calls(
         return contract_error("only gp can issue calls");
     }
 
-    Ok(Response::new().add_messages(calls.into_iter().map(|call| {
-        wasm_execute(
-            call.subscription,
-            &SubExecuteMsg::IssueCapitalCall {
-                capital_call: SubCapitalCallIssuance {
-                    amount: call.amount,
-                    days_of_notice: call.days_of_notice,
-                },
-            },
-            vec![],
-        )
-        .unwrap()
-    })))
-}
-
-pub fn try_close_calls(
-    deps: DepsMut<ProvenanceQuery>,
-    env: Env,
-    info: MessageInfo,
-    calls: HashSet<CallClosure>,
-    is_retroactive: bool,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can close calls");
+    if let Some(mut existing) = outstanding_capital_calls(deps.storage).may_load()? {
+        calls.append(&mut existing)
     }
 
-    let transactions: HashMap<Addr, u64> = calls
-        .iter()
-        .map(|call| {
-            let transactions: SubTransactions = deps
-                .querier
-                .query_wasm_smart(call.subscription.clone(), &SubQueryMsg::GetTransactions {})
-                .unwrap();
+    outstanding_capital_calls(deps.storage).save(&calls)?;
 
-            let active_call_amount = transactions.capital_calls.active.unwrap().amount;
-
-            (call.subscription.clone(), active_call_amount)
-        })
-        .collect();
-
-    let commitment_total = transactions.values().sum();
-    let supply = state.capital_to_shares(commitment_total);
+    let investment_total = calls.iter().map(|it| it.amount).sum();
+    let supply = state.capital_to_shares(investment_total);
     let mint = mint_marker_supply(supply.into(), state.investment_denom.clone())?;
     let withdraw = withdraw_coins(
         state.investment_denom.clone(),
         supply.into(),
-        state.investment_denom.clone(),
+        state.investment_denom,
         env.contract.address,
     )?;
 
+    Ok(Response::new().add_messages(vec![mint, withdraw]))
+}
+
+pub fn try_claim_investment(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    amount: u64,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    let mut calls = outstanding_capital_calls(deps.storage).load()?;
+    let call = if let Some(index) = calls
+        .iter()
+        .position(|it| it.subscription == info.sender && it.amount == amount)
+    {
+        calls.remove(index)
+    } else {
+        return contract_error("no call for subscription");
+    };
+
+    match info
+        .funds
+        .iter()
+        .find(|it| it.denom == state.commitment_denom)
+    {
+        Some(commitment) => {
+            if commitment.amount.u128() != state.capital_to_shares(call.amount).into() {
+                return contract_error("sent funds should match specified commitment");
+            }
+        }
+        None => return contract_error("commitment required for investment"),
+    };
+
+    match info.funds.iter().find(|it| it.denom == state.capital_denom) {
+        Some(capital) => {
+            if capital.amount.u128() != call.amount.into() {
+                return contract_error("sent funds should match specified capital");
+            }
+        }
+        None => return contract_error("capital required for investment"),
+    };
+
+    let send_investment = BankMsg::Send {
+        to_address: call.subscription.into_string(),
+        amount: coins(
+            state.capital_to_shares(call.amount).into(),
+            state.investment_denom.clone(),
+        ),
+    };
+
+    let commitment_marker = ProvenanceQuerier::new(&deps.querier)
+        .get_marker_by_denom(state.commitment_denom.clone())?;
+    let deposit_commitment = BankMsg::Send {
+        to_address: commitment_marker.address.into_string(),
+        amount: coins(
+            state.capital_to_shares(call.amount).into(),
+            state.commitment_denom.clone(),
+        ),
+    };
+    let burn_commitment = burn_marker_supply(
+        state.capital_to_shares(call.amount).into(),
+        state.commitment_denom,
+    )?;
+
     Ok(Response::new()
-        .add_message(mint)
-        .add_message(withdraw)
-        .add_messages(calls.into_iter().map(|call| {
-            wasm_execute(
-                call.subscription.clone(),
-                &SubExecuteMsg::CloseCapitalCall { is_retroactive },
-                coins(
-                    state.capital_to_shares(*transactions.get(&call.subscription).unwrap()) as u128,
-                    state.investment_denom.clone(),
-                ),
-            )
-            .unwrap()
-        })))
+        .add_message(send_investment)
+        .add_message(deposit_commitment)
+        .add_message(burn_commitment))
 }
 
 #[cfg(test)]
@@ -105,30 +119,35 @@ mod tests {
     use crate::contract::tests::default_deps;
     use crate::mock::mint_args;
     use crate::mock::msg_at_index;
-    use crate::mock::wasm_msg;
-    use crate::mock::wasm_smart_mock_dependencies;
     use crate::mock::withdraw_args;
-    use crate::msg::CallClosure;
-    use crate::msg::CallIssuance;
+    use crate::msg::CapitalCall;
     use crate::msg::HandleMsg;
-    use crate::state::config;
-    use crate::state::State;
-    use crate::sub_msg::SubCapitalCall;
-    use crate::sub_msg::SubCapitalCalls;
-    use crate::sub_msg::SubTransactions;
+    use crate::state::outstanding_capital_calls;
+    use cosmwasm_std::coin;
+    use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
-    use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
-    use cosmwasm_std::ContractResult;
-    use cosmwasm_std::SystemResult;
-    use cosmwasm_std::WasmMsg;
-    use std::collections::HashSet;
+    use provwasm_mocks::must_read_binary_file;
+    use provwasm_mocks::ProvenanceMockQuerier;
+    use provwasm_std::Marker;
+
+    fn load_markers(querier: &mut ProvenanceMockQuerier) {
+        let bin = must_read_binary_file("testdata/marker.json");
+        let expected_marker: Marker = from_binary(&bin).unwrap();
+        querier.with_markers(vec![expected_marker.clone()]);
+    }
 
     #[test]
 
     fn issue_calls() {
         let mut deps = default_deps(None);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
+            .unwrap();
 
         // issue calls
         let res = execute(
@@ -136,10 +155,9 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueCapitalCalls {
-                calls: vec![CallIssuance {
-                    subscription: Addr::unchecked("sub_1"),
+                calls: vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_2"),
                     amount: 10_000,
-                    days_of_notice: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -147,12 +165,28 @@ mod tests {
         )
         .unwrap();
 
-        // verify wasm execute message is sent
-        assert_eq!(1, res.messages.len());
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 0)),
-            WasmMsg::Execute { .. }
-        ))
+        assert_eq!(2, res.messages.len());
+
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(200, mint.amount.u128());
+        assert_eq!("investment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("investment_coin", marker_denom);
+        assert_eq!(200, coin.amount.u128());
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!("cosmos2contract", recipient.clone().into_string());
+
+        // verify capital call is saved
+        assert_eq!(
+            2,
+            outstanding_capital_calls(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
     }
 
     #[test]
@@ -166,10 +200,9 @@ mod tests {
             mock_env(),
             mock_info("bad_actor", &[]),
             HandleMsg::IssueCapitalCalls {
-                calls: vec![CallIssuance {
+                calls: vec![CapitalCall {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
-                    days_of_notice: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -179,86 +212,30 @@ mod tests {
     }
 
     #[test]
-    fn close_calls() {
-        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
-            SystemResult::Ok(ContractResult::Ok(
-                to_binary(&SubTransactions {
-                    capital_calls: SubCapitalCalls {
-                        active: Some(SubCapitalCall {
-                            sequence: 1,
-                            amount: 10_000,
-                            days_of_notice: None,
-                        }),
-                        closed: HashSet::new(),
-                        cancelled: HashSet::new(),
-                    },
-                    redemptions: HashSet::new(),
-                    distributions: HashSet::new(),
-                    withdrawals: HashSet::new(),
-                })
-                .unwrap(),
-            ))
-        });
-
-        config(&mut deps.storage)
-            .save(&State::test_default())
+    fn claim_investment() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
             .unwrap();
 
         // close call
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &[]),
-            HandleMsg::CloseCapitalCalls {
-                calls: vec![CallClosure {
-                    subscription: Addr::unchecked("sub_1"),
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
-            },
+            mock_info(
+                "sub_1",
+                &vec![coin(100, "commitment_coin"), coin(10_000, "stable_coin")],
+            ),
+            HandleMsg::ClaimInvestment { amount: 10_000 },
         )
         .unwrap();
 
-        // verify that mint, withdraw, and execute messages are sent
         assert_eq!(3, res.messages.len());
 
-        // verify minted coin
-        let mint = mint_args(msg_at_index(&res, 0));
-        assert_eq!(100, mint.amount.u128());
-        assert_eq!("investment_coin", mint.denom);
-
-        // verify withdrawn coin
-        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
-        assert_eq!("investment_coin", marker_denom);
-        assert_eq!(100, coin.amount.u128());
-        assert_eq!("investment_coin", coin.denom);
-        assert_eq!("cosmos2contract", recipient.clone().into_string());
-
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 2)),
-            WasmMsg::Execute { .. }
-        ));
-    }
-
-    #[test]
-    fn close_calls_bad_actor() {
-        let mut deps = default_deps(None);
-
-        // close call
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bad_actor", &[]),
-            HandleMsg::CloseCapitalCalls {
-                calls: vec![CallClosure {
-                    subscription: Addr::unchecked("sub_1"),
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
-            },
-        );
-        assert!(res.is_err());
+        // todo: verify send investment, deposit commitment, burn commitment
     }
 }

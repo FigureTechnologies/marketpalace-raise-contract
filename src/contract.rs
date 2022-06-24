@@ -1,4 +1,4 @@
-use crate::call::try_close_calls;
+use crate::call::try_claim_investment;
 use crate::call::try_issue_calls;
 use crate::error::contract_error;
 use crate::recover::try_recover;
@@ -72,11 +72,8 @@ pub fn execute(
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
-        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls {
-            calls,
-            is_retroactive,
-        } => try_close_calls(deps, env, info, calls, is_retroactive),
+        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, env, info, calls),
+        HandleMsg::ClaimInvestment { amount } => try_claim_investment(deps, info, amount),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }

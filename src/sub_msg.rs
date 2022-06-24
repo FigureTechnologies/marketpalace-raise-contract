@@ -19,21 +19,6 @@ pub struct SubInstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum SubExecuteMsg {
     Accept {},
-    IssueCapitalCall {
-        capital_call: SubCapitalCallIssuance,
-    },
-    CloseCapitalCall {
-        is_retroactive: bool,
-    },
-    IssueRedemption {
-        redemption: u64,
-        payment: u64,
-        is_retroactive: bool,
-    },
-    IssueDistribution {
-        payment: u64,
-        is_retroactive: bool,
-    },
 }
 
 #[derive(Serialize, Deserialize)]

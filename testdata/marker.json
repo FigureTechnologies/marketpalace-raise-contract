@@ -2,7 +2,7 @@
   "address": "tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u",
   "coins": [
     {
-      "denom": "fund-coin",
+      "denom": "commitment_coin",
       "amount": "420"
     }
   ],
@@ -23,7 +23,7 @@
     }
   ],
   "status": "active",
-  "denom": "fund-coin",
+  "denom": "commitment_coin",
   "total_supply": "420",
   "marker_type": "coin",
   "supply_fixed": false
