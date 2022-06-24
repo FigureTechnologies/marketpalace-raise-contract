@@ -6,9 +6,10 @@ use std::hash::Hash;
 use cosmwasm_std::{Addr, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 
-use crate::msg::Distribution;
+use crate::msg::{Distribution, Redemption};
 
 pub static CONFIG_KEY: &[u8] = b"config";
+pub static REDEMPTIONS_KEY: &[u8] = b"redemptions";
 pub static DISTRIBUTION_KEY: &[u8] = b"distribution";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -74,6 +75,10 @@ pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
 
 pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
+}
+
+pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<Vec<Redemption>> {
+    singleton(storage, REDEMPTIONS_KEY)
 }
 
 pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<Vec<Distribution>> {

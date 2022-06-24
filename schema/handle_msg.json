@@ -143,21 +143,28 @@
         "issue_redemptions": {
           "type": "object",
           "required": [
-            "is_retroactive",
             "redemptions"
           ],
           "properties": {
-            "is_retroactive": {
-              "type": "boolean"
-            },
             "redemptions": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Redemption"
-              },
-              "uniqueItems": true
+              }
             }
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "claim_redemption"
+      ],
+      "properties": {
+        "claim_redemption": {
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -171,8 +178,7 @@
         "issue_distributions": {
           "type": "object",
           "required": [
-            "distributions",
-            "is_retroactive"
+            "distributions"
           ],
           "properties": {
             "distributions": {
@@ -180,11 +186,20 @@
               "items": {
                 "$ref": "#/definitions/Distribution"
               }
-            },
-            "is_retroactive": {
-              "type": "boolean"
             }
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "claim_distribution"
+      ],
+      "properties": {
+        "claim_distribution": {
+          "type": "object"
         }
       },
       "additionalProperties": false
