@@ -6,6 +6,7 @@ pub mod migrate;
 pub mod msg;
 pub mod query;
 pub mod recover;
+pub mod redemption;
 pub mod state;
 pub mod sub_msg;
 pub mod subscribe;

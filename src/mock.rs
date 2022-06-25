@@ -8,13 +8,13 @@ use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
 };
-use provwasm_std::MarkerMsgParams;
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceMsgParams;
+use provwasm_std::{Marker, MarkerMsgParams};
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
-use provwasm_mocks::ProvenanceMockQuerier;
+use provwasm_mocks::{must_read_binary_file, ProvenanceMockQuerier};
 use provwasm_std::ProvenanceQuery;
 
 pub type MockWasmSmartHandler = fn(String, Binary) -> SystemResult<ContractResult<Binary>>;
@@ -145,4 +145,13 @@ pub fn execute_args<T: DeserializeOwned>(
     } else {
         panic!("not a wasm execute message")
     }
+}
+
+pub fn load_markers(querier: &mut ProvenanceMockQuerier) {
+    let get_marker = |name: &str| -> Marker {
+        let bin = must_read_binary_file(&format!("testdata/{}_marker.json", name));
+        from_binary(&bin).unwrap()
+    };
+
+    querier.with_markers(vec![get_marker("commitment"), get_marker("investment")]);
 }

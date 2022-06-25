@@ -118,6 +118,7 @@ mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
     use crate::mock::burn_args;
+    use crate::mock::load_markers;
     use crate::mock::mint_args;
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
@@ -126,19 +127,9 @@ mod tests {
     use crate::msg::HandleMsg;
     use crate::state::outstanding_capital_calls;
     use cosmwasm_std::coin;
-    use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::Addr;
-    use provwasm_mocks::must_read_binary_file;
-    use provwasm_mocks::ProvenanceMockQuerier;
-    use provwasm_std::Marker;
-
-    fn load_markers(querier: &mut ProvenanceMockQuerier) {
-        let bin = must_read_binary_file("testdata/marker.json");
-        let expected_marker: Marker = from_binary(&bin).unwrap();
-        querier.with_markers(vec![expected_marker.clone()]);
-    }
 
     #[test]
 
@@ -210,6 +201,7 @@ mod tests {
                 .collect(),
             },
         );
+
         assert!(res.is_err());
     }
 
