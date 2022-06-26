@@ -1,5 +1,6 @@
 pub mod call;
 pub mod contract;
+pub mod distribution;
 pub mod error;
 pub mod instantiate;
 pub mod migrate;

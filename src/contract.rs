@@ -1,10 +1,11 @@
 use crate::call::try_claim_investment;
 use crate::call::try_issue_calls;
+use crate::distribution::try_claim_distribution;
+use crate::distribution::try_issue_distributions;
 use crate::error::contract_error;
 use crate::recover::try_recover;
 use crate::redemption::try_claim_redemption;
 use crate::redemption::try_issue_redemptions;
-use crate::state::outstanding_distributions;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_propose_subscription;
 use cosmwasm_std::{
@@ -15,8 +16,8 @@ use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceQuery;
 
 use crate::error::ContractError;
-use crate::msg::{Distribution, HandleMsg};
-use crate::state::{config, config_read, Withdrawal};
+use crate::msg::HandleMsg;
+use crate::state::{config, Withdrawal};
 
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
@@ -96,59 +97,6 @@ pub fn execute(
     }
 }
 
-pub fn try_issue_distributions(
-    deps: DepsMut<ProvenanceQuery>,
-    info: MessageInfo,
-    mut distributions: Vec<Distribution>,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can issue distributions");
-    }
-
-    if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {
-        distributions.append(&mut existing)
-    }
-
-    outstanding_distributions(deps.storage).save(&distributions)?;
-
-    Ok(Response::default())
-}
-
-pub fn try_claim_distribution(
-    deps: DepsMut<ProvenanceQuery>,
-    info: MessageInfo,
-    amount: u64,
-    to: Addr,
-    memo: Option<String>,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    let mut distributions = outstanding_distributions(deps.storage).load()?;
-    let distribution = if let Some(index) = distributions
-        .iter()
-        .position(|it| it.subscription == info.sender && it.amount == amount)
-    {
-        distributions.remove(index)
-    } else {
-        return contract_error("no distribution for subscription");
-    };
-
-    outstanding_distributions(deps.storage).save(&distributions)?;
-
-    let send = BankMsg::Send {
-        to_address: to.into_string(),
-        amount: coins(distribution.amount as u128, state.capital_denom),
-    };
-
-    let msg = Response::new().add_message(send);
-    Ok(match memo {
-        Some(memo) => msg.add_attribute(String::from("memo"), memo),
-        None => msg,
-    })
-}
-
 pub fn try_issue_withdrawal(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -219,105 +167,6 @@ pub mod tests {
         config(&mut deps.storage).save(&state).unwrap();
 
         deps
-    }
-
-    #[test]
-    fn issue_distributions() {
-        let mut deps = default_deps(None);
-        outstanding_distributions(&mut deps.storage)
-            .save(&vec![Distribution {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-            }])
-            .unwrap();
-
-        execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_2"),
-                    amount: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-            },
-        )
-        .unwrap();
-
-        // verify distribution is saved
-        assert_eq!(
-            2,
-            outstanding_distributions(&mut deps.storage)
-                .load()
-                .unwrap()
-                .len()
-        )
-    }
-
-    #[test]
-    fn issue_distributions_bad_actor() {
-        let res = execute(
-            default_deps(None).as_mut(),
-            mock_env(),
-            mock_info("bad_actor", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueDistributions {
-                distributions: vec![],
-            },
-        );
-
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn claim_distribution() {
-        let mut deps = default_deps(None);
-        outstanding_distributions(&mut deps.storage)
-            .save(&vec![
-                Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                },
-                Distribution {
-                    subscription: Addr::unchecked("sub_2"),
-                    amount: 10_000,
-                },
-            ])
-            .unwrap();
-
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("sub_1", &vec![]),
-            HandleMsg::ClaimDistribution {
-                amount: 10_000,
-                to: Addr::unchecked("destination"),
-                memo: Some(String::from("note")),
-            },
-        )
-        .unwrap();
-
-        // verify send message
-        assert_eq!(1, res.messages.len());
-        let (to_address, coins) = send_args(msg_at_index(&res, 0));
-        assert_eq!("destination", to_address);
-        assert_eq!(10_000, coins.first().unwrap().amount.u128());
-
-        // verify memo
-        assert_eq!(1, res.attributes.len());
-        let attribute = res.attributes.get(0).unwrap();
-        assert_eq!("memo", attribute.key);
-        assert_eq!("note", attribute.value);
-
-        // verify distribution is removed
-        assert_eq!(
-            1,
-            outstanding_distributions(&mut deps.storage)
-                .load()
-                .unwrap()
-                .len()
-        )
     }
 
     #[test]
