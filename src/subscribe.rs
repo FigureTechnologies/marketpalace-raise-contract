@@ -1,6 +1,5 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::error::ContractError;
 use crate::msg::AcceptSubscription;
 use crate::state::config;
 use crate::state::{config_read, Status};
@@ -78,7 +77,7 @@ pub fn try_accept_subscriptions(
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
 ) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
+    let mut state = config(deps.storage).load()?;
 
     if info.sender != state.gp {
         return contract_error("only gp can accept subscriptions");
@@ -110,14 +109,11 @@ pub fn try_accept_subscriptions(
         }
     }
 
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        accepts.iter().for_each(|accept| {
-            state.pending_review_subs.remove(&accept.subscription);
-            state.accepted_subs.insert(accept.subscription.clone());
-        });
-
-        Ok(state)
-    })?;
+    accepts.iter().for_each(|accept| {
+        state.pending_review_subs.remove(&accept.subscription);
+        state.accepted_subs.insert(accept.subscription.clone());
+    });
+    config(deps.storage).save(&state)?;
 
     let commitment_total: u64 = accepts.iter().map(|accept| accept.commitment).sum();
     let supply = state.capital_to_shares(commitment_total);

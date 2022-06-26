@@ -157,23 +157,19 @@ pub fn try_issue_withdrawal(
     amount: u64,
     memo: Option<String>,
 ) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
+    let mut state = config(deps.storage).load()?;
 
     if info.sender != state.gp {
         return contract_error("only gp can redeem capital");
     }
 
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.sequence += 1;
-        state.issued_withdrawals.insert(Withdrawal {
-            sequence: state.sequence,
-            to: to.clone(),
-            amount,
-        });
-        Ok(state)
-    })?;
-
-    let state = config_read(deps.storage).load()?;
+    state.sequence += 1;
+    state.issued_withdrawals.insert(Withdrawal {
+        sequence: state.sequence,
+        to: to.clone(),
+        amount,
+    });
+    config(deps.storage).save(&state)?;
 
     let send = BankMsg::Send {
         to_address: to.to_string(),

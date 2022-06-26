@@ -1,8 +1,6 @@
 use crate::contract::ContractResponse;
-use crate::error::ContractError;
 use crate::msg::MigrateMsg;
 use crate::state::config;
-use crate::state::config_read;
 use crate::version::CONTRACT_NAME;
 use crate::version::CONTRACT_VERSION;
 use cosmwasm_std::entry_point;
@@ -21,13 +19,11 @@ struct EmptyArgs {}
 pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> ContractResponse {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let state = config_read(deps.storage).load()?;
+    let mut state = config(deps.storage).load()?;
 
     if state.subscription_code_id != msg.subscription_code_id {
-        config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-            state.subscription_code_id = msg.subscription_code_id;
-            Ok(state)
-        })?;
+        state.subscription_code_id = msg.subscription_code_id;
+        config(deps.storage).save(&state)?;
 
         let sub_migrations = state
             .pending_review_subs
