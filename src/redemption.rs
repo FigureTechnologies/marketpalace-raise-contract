@@ -28,6 +28,38 @@ pub fn try_issue_redemptions(
     Ok(Response::default())
 }
 
+pub fn try_cancel_redemptions(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    redemptions: Vec<Redemption>,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp {
+        return contract_error("only gp can cancel redemptions");
+    }
+
+    if let Some(mut existing) = outstanding_redemptions(deps.storage).may_load()? {
+        for redemption in redemptions {
+            if let Some(index) = existing.iter().position(|it| {
+                it.subscription == redemption.subscription
+                    && it.asset == redemption.asset
+                    && it.capital == redemption.capital
+            }) {
+                existing.remove(index)
+            } else {
+                return contract_error("no redemption found");
+            };
+        }
+
+        outstanding_redemptions(deps.storage).save(&existing)?;
+    } else {
+        return contract_error("no outstanding redemptions to cancel");
+    };
+
+    Ok(Response::default())
+}
+
 pub fn try_claim_redemption(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -113,7 +145,7 @@ pub mod tests {
         execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &coins(10_000, "stable_coin")),
+            mock_info("gp", &vec![]),
             HandleMsg::IssueRedemptions {
                 redemptions: vec![Redemption {
                     subscription: Addr::unchecked("sub_2"),
@@ -126,7 +158,7 @@ pub mod tests {
         )
         .unwrap();
 
-        // verify distribution is saved
+        // verify redemption is saved
         assert_eq!(
             2,
             outstanding_redemptions(&mut deps.storage)
@@ -143,6 +175,57 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueRedemptions {
+                redemptions: vec![],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn cancel_redemptions() {
+        let mut deps = default_deps(None);
+        outstanding_redemptions(&mut deps.storage)
+            .save(&vec![Redemption {
+                subscription: Addr::unchecked("sub_1"),
+                capital: 10_000,
+                asset: 5_000,
+            }])
+            .unwrap();
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::CancelRedemptions {
+                redemptions: vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    capital: 10_000,
+                    asset: 5_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify redemption is removed
+        assert_eq!(
+            0,
+            outstanding_redemptions(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn cancel_redemptions_bad_actor() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &coins(10_000, "stable_coin")),
+            HandleMsg::CancelRedemptions {
                 redemptions: vec![],
             },
         );

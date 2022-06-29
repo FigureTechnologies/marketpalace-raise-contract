@@ -47,6 +47,9 @@ pub enum HandleMsg {
     IssueRedemptions {
         redemptions: Vec<Redemption>,
     },
+    CancelRedemptions {
+        redemptions: Vec<Redemption>,
+    },
     ClaimRedemption {
         asset: u64,
         capital: u64,

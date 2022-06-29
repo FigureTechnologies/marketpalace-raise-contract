@@ -4,6 +4,7 @@ use crate::distribution::try_claim_distribution;
 use crate::distribution::try_issue_distributions;
 use crate::error::contract_error;
 use crate::recover::try_recover;
+use crate::redemption::try_cancel_redemptions;
 use crate::redemption::try_claim_redemption;
 use crate::redemption::try_issue_redemptions;
 use crate::subscribe::try_accept_subscriptions;
@@ -78,6 +79,9 @@ pub fn execute(
         HandleMsg::ClaimInvestment { amount } => try_claim_investment(deps, info, amount),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
+        }
+        HandleMsg::CancelRedemptions { redemptions } => {
+            try_cancel_redemptions(deps, info, redemptions)
         }
         HandleMsg::ClaimRedemption {
             asset,

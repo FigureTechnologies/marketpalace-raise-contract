@@ -153,6 +153,29 @@
     {
       "type": "object",
       "required": [
+        "cancel_redemptions"
+      ],
+      "properties": {
+        "cancel_redemptions": {
+          "type": "object",
+          "required": [
+            "redemptions"
+          ],
+          "properties": {
+            "redemptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Redemption"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "claim_redemption"
       ],
       "properties": {
