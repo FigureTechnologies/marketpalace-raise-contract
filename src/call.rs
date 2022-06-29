@@ -79,6 +79,7 @@ pub fn try_cancel_calls(
 
 pub fn try_claim_investment(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
     amount: u64,
 ) -> ContractResponse {
@@ -91,8 +92,14 @@ pub fn try_claim_investment(
     {
         calls.remove(index)
     } else {
-        return contract_error("no call for subscription");
+        return contract_error("no capital call for subscription");
     };
+
+    if let Some(due) = call.due_epoch_seconds {
+        if due < env.block.time.seconds() {
+            return contract_error("capital call has expired");
+        }
+    }
 
     match info
         .funds
@@ -161,6 +168,7 @@ mod tests {
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::Addr;
+    use cosmwasm_std::Timestamp;
 
     #[test]
 
@@ -170,6 +178,7 @@ mod tests {
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                due_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -182,6 +191,7 @@ mod tests {
                 calls: vec![CapitalCall {
                     subscription: Addr::unchecked("sub_2"),
                     amount: 10_000,
+                    due_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -227,6 +237,7 @@ mod tests {
                 calls: vec![CapitalCall {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
+                    due_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -244,11 +255,12 @@ mod tests {
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                due_epoch_seconds: None,
             }])
             .unwrap();
 
         // cancel calls
-        let res = execute(
+        execute(
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
@@ -256,6 +268,7 @@ mod tests {
                 calls: vec![CapitalCall {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
+                    due_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -299,10 +312,11 @@ mod tests {
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                due_epoch_seconds: None,
             }])
             .unwrap();
 
-        // close call
+        // claim investment
         let res = execute(
             deps.as_mut(),
             mock_env(),
@@ -342,10 +356,11 @@ mod tests {
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                due_epoch_seconds: None,
             }])
             .unwrap();
 
-        // close call
+        // claim investment
         let res = execute(
             deps.as_mut(),
             mock_env(),
@@ -357,6 +372,34 @@ mod tests {
     }
 
     #[test]
+    fn claim_investment_past_due() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+                due_epoch_seconds: Some(1672531200), // Jan 01 2023 UTC
+            }])
+            .unwrap();
+        let mut env = mock_env();
+        env.block.time = Timestamp::from_seconds(1675209600); // Feb 01 2023 UTC
+
+        // claim investment
+        let res = execute(
+            deps.as_mut(),
+            env,
+            mock_info(
+                "sub_1",
+                &vec![coin(100, "commitment_coin"), coin(10_000, "stable_coin")],
+            ),
+            HandleMsg::ClaimInvestment { amount: 10_000 },
+        );
+
+        assert!(res.is_err())
+    }
+
+    #[test]
     fn claim_investment_missing_capital() {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
@@ -364,6 +407,7 @@ mod tests {
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                due_epoch_seconds: None,
             }])
             .unwrap();
 

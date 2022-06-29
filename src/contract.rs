@@ -79,7 +79,7 @@ pub fn execute(
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, env, info, calls),
         HandleMsg::CancelCapitalCalls { calls } => try_cancel_calls(deps, info, calls),
-        HandleMsg::ClaimInvestment { amount } => try_claim_investment(deps, info, amount),
+        HandleMsg::ClaimInvestment { amount } => try_claim_investment(deps, env, info, amount),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }

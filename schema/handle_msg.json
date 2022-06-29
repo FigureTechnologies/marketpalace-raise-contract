@@ -383,6 +383,14 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "due_epoch_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "subscription": {
           "$ref": "#/definitions/Addr"
         }

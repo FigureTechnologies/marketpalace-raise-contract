@@ -103,6 +103,7 @@ impl Hash for AcceptSubscription {
 pub struct CapitalCall {
     pub subscription: Addr,
     pub amount: u64,
+    pub due_epoch_seconds: Option<u64>,
 }
 
 impl PartialEq for CapitalCall {
