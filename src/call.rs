@@ -46,6 +46,37 @@ pub fn try_issue_calls(
     Ok(Response::new().add_messages(vec![mint, withdraw]))
 }
 
+pub fn try_cancel_calls(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    calls: Vec<CapitalCall>,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp {
+        return contract_error("only gp can cancel capital calls");
+    }
+
+    if let Some(mut existing) = outstanding_capital_calls(deps.storage).may_load()? {
+        for call in calls {
+            if let Some(index) = existing
+                .iter()
+                .position(|it| it.subscription == call.subscription && it.amount == call.amount)
+            {
+                existing.remove(index)
+            } else {
+                return contract_error("no capital call found");
+            };
+        }
+
+        outstanding_capital_calls(deps.storage).save(&existing)?;
+    } else {
+        return contract_error("no outstanding capital calls to cancel");
+    };
+
+    Ok(Response::default())
+}
+
 pub fn try_claim_investment(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -199,6 +230,61 @@ mod tests {
                 }]
                 .into_iter()
                 .collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+
+    fn cancel_calls() {
+        let mut deps = default_deps(None);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![CapitalCall {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
+            .unwrap();
+
+        // cancel calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CancelCapitalCalls {
+                calls: vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify capital call is removed
+        assert_eq!(
+            0,
+            outstanding_capital_calls(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+
+    fn cancel_calls_bad_actor() {
+        let mut deps = default_deps(None);
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::CancelCapitalCalls {
+                calls: vec![].into_iter().collect(),
             },
         );
 

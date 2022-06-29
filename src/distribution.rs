@@ -36,7 +36,7 @@ pub fn try_cancel_distributions(
     let state = config_read(deps.storage).load()?;
 
     if info.sender != state.gp {
-        return contract_error("only gp can cancel redemptions");
+        return contract_error("only gp can cancel distributions");
     }
 
     if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {

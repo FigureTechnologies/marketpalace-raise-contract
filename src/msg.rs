@@ -41,6 +41,9 @@ pub enum HandleMsg {
     IssueCapitalCalls {
         calls: Vec<CapitalCall>,
     },
+    CancelCapitalCalls {
+        calls: Vec<CapitalCall>,
+    },
     ClaimInvestment {
         amount: u64,
     },

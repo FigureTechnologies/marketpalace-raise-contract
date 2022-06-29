@@ -108,6 +108,29 @@
     {
       "type": "object",
       "required": [
+        "cancel_capital_calls"
+      ],
+      "properties": {
+        "cancel_capital_calls": {
+          "type": "object",
+          "required": [
+            "calls"
+          ],
+          "properties": {
+            "calls": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CapitalCall"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "claim_investment"
       ],
       "properties": {
