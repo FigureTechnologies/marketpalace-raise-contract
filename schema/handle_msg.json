@@ -237,6 +237,29 @@
     {
       "type": "object",
       "required": [
+        "cancel_distributions"
+      ],
+      "properties": {
+        "cancel_distributions": {
+          "type": "object",
+          "required": [
+            "distributions"
+          ],
+          "properties": {
+            "distributions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Distribution"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "claim_distribution"
       ],
       "properties": {

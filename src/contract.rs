@@ -1,5 +1,6 @@
 use crate::call::try_claim_investment;
 use crate::call::try_issue_calls;
+use crate::distribution::try_cancel_distributions;
 use crate::distribution::try_claim_distribution;
 use crate::distribution::try_issue_distributions;
 use crate::error::contract_error;
@@ -91,6 +92,9 @@ pub fn execute(
         } => try_claim_redemption(deps, info, asset, capital, to, memo),
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
+        }
+        HandleMsg::CancelDistributions { distributions } => {
+            try_cancel_distributions(deps, info, distributions)
         }
         HandleMsg::ClaimDistribution { amount, to, memo } => {
             try_claim_distribution(deps, info, amount, to, memo)

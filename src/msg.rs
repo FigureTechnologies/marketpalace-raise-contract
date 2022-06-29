@@ -59,6 +59,9 @@ pub enum HandleMsg {
     IssueDistributions {
         distributions: Vec<Distribution>,
     },
+    CancelDistributions {
+        distributions: Vec<Distribution>,
+    },
     ClaimDistribution {
         amount: u64,
         to: Addr,

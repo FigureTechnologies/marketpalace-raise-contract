@@ -28,6 +28,36 @@ pub fn try_issue_distributions(
     Ok(Response::default())
 }
 
+pub fn try_cancel_distributions(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    distributions: Vec<Distribution>,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp {
+        return contract_error("only gp can cancel redemptions");
+    }
+
+    if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {
+        for distribution in distributions {
+            if let Some(index) = existing.iter().position(|it| {
+                it.subscription == distribution.subscription && it.amount == distribution.amount
+            }) {
+                existing.remove(index)
+            } else {
+                return contract_error("no distribution found");
+            };
+        }
+
+        outstanding_distributions(deps.storage).save(&existing)?;
+    } else {
+        return contract_error("no outstanding distributions to cancel");
+    };
+
+    Ok(Response::default())
+}
+
 pub fn try_claim_distribution(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -85,7 +115,7 @@ pub mod tests {
         execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &coins(10_000, "stable_coin")),
+            mock_info("gp", &vec![]),
             HandleMsg::IssueDistributions {
                 distributions: vec![Distribution {
                     subscription: Addr::unchecked("sub_2"),
@@ -114,6 +144,55 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueDistributions {
+                distributions: vec![],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn cancel_distributions() {
+        let mut deps = default_deps(None);
+        outstanding_distributions(&mut deps.storage)
+            .save(&vec![Distribution {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+            }])
+            .unwrap();
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::CancelDistributions {
+                distributions: vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify distribution is removed
+        assert_eq!(
+            0,
+            outstanding_distributions(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn cancel_distributions_bad_actor() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &coins(10_000, "stable_coin")),
+            HandleMsg::CancelDistributions {
                 distributions: vec![],
             },
         );
