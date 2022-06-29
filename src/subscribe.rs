@@ -29,7 +29,6 @@ pub fn try_propose_subscription(
     info: MessageInfo,
     min_commitment: u64,
     max_commitment: u64,
-    min_days_of_notice: Option<u16>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -60,7 +59,6 @@ pub fn try_propose_subscription(
                 min_commitment,
                 max_commitment,
                 capital_per_share: state.capital_per_share,
-                min_days_of_notice,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -218,7 +216,6 @@ mod tests {
             HandleMsg::ProposeSubscription {
                 min_commitment: 10_000,
                 max_commitment: 100_000,
-                min_days_of_notice: None,
             },
         )
         .unwrap();
@@ -237,7 +234,6 @@ mod tests {
             HandleMsg::ProposeSubscription {
                 min_commitment: 10_000,
                 max_commitment: 5_000,
-                min_days_of_notice: None,
             },
         );
         assert!(res.is_err());
@@ -256,7 +252,6 @@ mod tests {
             HandleMsg::ProposeSubscription {
                 min_commitment: 110_000,
                 max_commitment: 100_000,
-                min_days_of_notice: None,
             },
         );
         assert!(res.is_err());

@@ -44,14 +44,6 @@
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
-            },
-            "min_days_of_notice": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
             }
           }
         }

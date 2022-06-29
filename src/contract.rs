@@ -65,15 +65,7 @@ pub fn execute(
         HandleMsg::ProposeSubscription {
             min_commitment,
             max_commitment,
-            min_days_of_notice,
-        } => try_propose_subscription(
-            deps,
-            env,
-            info,
-            min_commitment,
-            max_commitment,
-            min_days_of_notice,
-        ),
+        } => try_propose_subscription(deps, env, info, min_commitment, max_commitment),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, env, info, subscriptions)
         }

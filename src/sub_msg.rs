@@ -12,19 +12,12 @@ pub struct SubInstantiateMsg {
     pub min_commitment: u64,
     pub max_commitment: u64,
     pub capital_per_share: u64,
-    pub min_days_of_notice: Option<u16>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubExecuteMsg {
     Accept {},
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SubCapitalCallIssuance {
-    pub amount: u64,
-    pub days_of_notice: Option<u16>,
 }
 
 #[derive(Serialize)]
@@ -62,7 +55,6 @@ pub struct SubCapitalCalls {
 pub struct SubCapitalCall {
     pub sequence: u16,
     pub amount: u64,
-    pub days_of_notice: Option<u16>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Eq, Hash)]
