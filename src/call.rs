@@ -344,6 +344,31 @@ mod tests {
     }
 
     #[test]
+
+    fn cancel_calls_not_found() {
+        let mut deps = default_deps(None);
+        outstanding_capital_calls(&mut deps.storage)
+            .save(&vec![])
+            .unwrap();
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CancelCapitalCalls {
+                calls: vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn claim_investment() {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
