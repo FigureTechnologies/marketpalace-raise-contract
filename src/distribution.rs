@@ -240,6 +240,20 @@ pub mod tests {
     }
 
     #[test]
+    fn cancel_distributions_missing() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("gp", &coins(10_000, "stable_coin")),
+            HandleMsg::CancelDistributions {
+                distributions: vec![],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn claim_distribution() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)

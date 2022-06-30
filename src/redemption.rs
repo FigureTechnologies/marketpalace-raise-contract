@@ -274,6 +274,20 @@ pub mod tests {
     }
 
     #[test]
+    fn cancel_redemptions_missing() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("gp", &coins(10_000, "stable_coin")),
+            HandleMsg::CancelRedemptions {
+                redemptions: vec![],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn claim_redemption() {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);

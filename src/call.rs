@@ -321,9 +321,23 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("bad_actor", &[]),
-            HandleMsg::CancelCapitalCalls {
-                calls: vec![].into_iter().collect(),
-            },
+            HandleMsg::CancelCapitalCalls { calls: vec![] },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+
+    fn cancel_calls_missing() {
+        let mut deps = default_deps(None);
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CancelCapitalCalls { calls: vec![] },
         );
 
         assert!(res.is_err());
