@@ -426,6 +426,14 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "available_epoch_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "capital": {
           "type": "integer",
           "format": "uint64",

@@ -1,4 +1,4 @@
-use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, MessageInfo, Response};
+use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{burn_marker_supply, ProvenanceQuerier, ProvenanceQuery};
 
 use crate::{
@@ -62,6 +62,7 @@ pub fn try_cancel_redemptions(
 
 pub fn try_claim_redemption(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
     asset: u64,
     capital: u64,
@@ -79,6 +80,12 @@ pub fn try_claim_redemption(
     } else {
         return contract_error("no redemption for subscription");
     };
+
+    if let Some(available) = redemption.available_epoch_seconds {
+        if available > env.block.time.seconds() {
+            return contract_error("redemption not yet available");
+        }
+    }
 
     let sent = match info.funds.first() {
         Some(sent) => sent,
@@ -130,6 +137,7 @@ pub mod tests {
     use crate::msg::HandleMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::Addr;
+    use cosmwasm_std::Timestamp;
 
     #[test]
     fn issue_redemptions() {
@@ -139,6 +147,7 @@ pub mod tests {
                 subscription: Addr::unchecked("sub_1"),
                 capital: 10_000,
                 asset: 5_000,
+                available_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -151,6 +160,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_2"),
                     capital: 10_000,
                     asset: 5_000,
+                    available_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -190,6 +200,7 @@ pub mod tests {
                 subscription: Addr::unchecked("sub_1"),
                 capital: 10_000,
                 asset: 5_000,
+                available_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -202,6 +213,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     capital: 10_000,
                     asset: 5_000,
+                    available_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -243,11 +255,13 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     capital: 10_000,
                     asset: 5_000,
+                    available_epoch_seconds: None,
                 },
                 Redemption {
                     subscription: Addr::unchecked("sub_2"),
                     capital: 10_000,
                     asset: 5_000,
+                    available_epoch_seconds: None,
                 },
             ])
             .unwrap();
@@ -307,6 +321,7 @@ pub mod tests {
                 subscription: Addr::unchecked("sub_1"),
                 capital: 10_000,
                 asset: 5_000,
+                available_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -314,6 +329,36 @@ pub mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("sub_1", &vec![]),
+            HandleMsg::ClaimRedemption {
+                asset: 5_000,
+                capital: 10_000,
+                to: Addr::unchecked("destination"),
+                memo: Some(String::from("note")),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn claim_redemption_not_available_yet() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_redemptions(&mut deps.storage)
+            .save(&vec![Redemption {
+                subscription: Addr::unchecked("sub_1"),
+                capital: 10_000,
+                asset: 5_000,
+                available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
+            }])
+            .unwrap();
+        let mut env = mock_env();
+        env.block.time = Timestamp::from_seconds(1672531200); // Jan 01 2023 UTC
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(5_000, "investment_coin")),
             HandleMsg::ClaimRedemption {
                 asset: 5_000,
                 capital: 10_000,

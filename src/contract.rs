@@ -83,7 +83,7 @@ pub fn execute(
             capital,
             to,
             memo,
-        } => try_claim_redemption(deps, info, asset, capital, to, memo),
+        } => try_claim_redemption(deps, env, info, asset, capital, to, memo),
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }

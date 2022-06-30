@@ -125,6 +125,7 @@ pub struct Redemption {
     pub subscription: Addr,
     pub asset: u64,
     pub capital: u64,
+    pub available_epoch_seconds: Option<u64>,
 }
 
 impl PartialEq for Redemption {
