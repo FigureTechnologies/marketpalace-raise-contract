@@ -202,6 +202,25 @@ pub mod tests {
     }
 
     #[test]
+    fn issue_redemptions_not_accepted() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("gp", &coins(10_000, "stable_coin")),
+            HandleMsg::IssueRedemptions {
+                redemptions: vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    asset: 100,
+                    capital: 10_000,
+                    available_epoch_seconds: None,
+                }],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn cancel_redemptions() {
         let mut deps = default_deps(None);
         outstanding_redemptions(&mut deps.storage)

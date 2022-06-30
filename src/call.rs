@@ -242,6 +242,22 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("bad_actor", &[]),
+            HandleMsg::IssueCapitalCalls { calls: vec![] },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+
+    fn issue_calls_not_accepted() {
+        let mut deps = default_deps(None);
+
+        // issue calls
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
             HandleMsg::IssueCapitalCalls {
                 calls: vec![CapitalCall {
                     subscription: Addr::unchecked("sub_1"),

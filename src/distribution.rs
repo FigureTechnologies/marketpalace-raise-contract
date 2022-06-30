@@ -171,6 +171,24 @@ pub mod tests {
     }
 
     #[test]
+    fn issue_distributions_not_accepted() {
+        let res = execute(
+            default_deps(None).as_mut(),
+            mock_env(),
+            mock_info("gp", &coins(10_000, "stable_coin")),
+            HandleMsg::IssueDistributions {
+                distributions: vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    available_epoch_seconds: None,
+                }],
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
     fn cancel_distributions() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)
