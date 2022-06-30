@@ -146,6 +146,7 @@ impl Hash for Redemption {
 pub struct Distribution {
     pub subscription: Addr,
     pub amount: u64,
+    pub available_epoch_seconds: Option<u64>,
 }
 
 impl PartialEq for Distribution {

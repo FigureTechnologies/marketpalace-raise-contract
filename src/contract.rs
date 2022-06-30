@@ -91,7 +91,7 @@ pub fn execute(
             try_cancel_distributions(deps, info, distributions)
         }
         HandleMsg::ClaimDistribution { amount, to, memo } => {
-            try_claim_distribution(deps, info, amount, to, memo)
+            try_claim_distribution(deps, env, info, amount, to, memo)
         }
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)

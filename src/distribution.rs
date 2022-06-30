@@ -1,4 +1,4 @@
-use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, MessageInfo, Response};
+use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::ProvenanceQuery;
 
 use crate::{
@@ -60,6 +60,7 @@ pub fn try_cancel_distributions(
 
 pub fn try_claim_distribution(
     deps: DepsMut<ProvenanceQuery>,
+    env: Env,
     info: MessageInfo,
     amount: u64,
     to: Addr,
@@ -76,6 +77,12 @@ pub fn try_claim_distribution(
     } else {
         return contract_error("no distribution for subscription");
     };
+
+    if let Some(available) = distribution.available_epoch_seconds {
+        if available > env.block.time.seconds() {
+            return contract_error("distribution not yet available");
+        }
+    }
 
     outstanding_distributions(deps.storage).save(&distributions)?;
 
@@ -101,6 +108,7 @@ pub mod tests {
     use crate::msg::HandleMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::Addr;
+    use cosmwasm_std::Timestamp;
 
     #[test]
     fn issue_distributions() {
@@ -109,6 +117,7 @@ pub mod tests {
             .save(&vec![Distribution {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                available_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -120,6 +129,7 @@ pub mod tests {
                 distributions: vec![Distribution {
                     subscription: Addr::unchecked("sub_2"),
                     amount: 10_000,
+                    available_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -158,6 +168,7 @@ pub mod tests {
             .save(&vec![Distribution {
                 subscription: Addr::unchecked("sub_1"),
                 amount: 10_000,
+                available_epoch_seconds: None,
             }])
             .unwrap();
 
@@ -169,6 +180,7 @@ pub mod tests {
                 distributions: vec![Distribution {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
+                    available_epoch_seconds: None,
                 }]
                 .into_iter()
                 .collect(),
@@ -208,10 +220,12 @@ pub mod tests {
                 Distribution {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
+                    available_epoch_seconds: None,
                 },
                 Distribution {
                     subscription: Addr::unchecked("sub_2"),
                     amount: 10_000,
+                    available_epoch_seconds: None,
                 },
             ])
             .unwrap();
@@ -248,5 +262,32 @@ pub mod tests {
                 .unwrap()
                 .len()
         )
+    }
+
+    #[test]
+    fn claim_distribution_not_available_yet() {
+        let mut deps = default_deps(None);
+        outstanding_distributions(&mut deps.storage)
+            .save(&vec![Distribution {
+                subscription: Addr::unchecked("sub_1"),
+                amount: 10_000,
+                available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
+            }])
+            .unwrap();
+        let mut env = mock_env();
+        env.block.time = Timestamp::from_seconds(1672531200); // Jan 01 2023 UTC
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![]),
+            HandleMsg::ClaimDistribution {
+                amount: 10_000,
+                to: Addr::unchecked("destination"),
+                memo: Some(String::from("note")),
+            },
+        );
+
+        assert!(res.is_err())
     }
 }
