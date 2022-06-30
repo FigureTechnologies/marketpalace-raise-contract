@@ -27,6 +27,13 @@ pub fn try_issue_calls(
         return contract_error("only gp can issue calls");
     }
 
+    if calls
+        .iter()
+        .any(|call| !state.accepted_subs.contains(&call.subscription))
+    {
+        return contract_error("subscription not accepted");
+    }
+
     if let Some(mut existing) = outstanding_capital_calls(deps.storage).may_load()? {
         calls.append(&mut existing)
     }
@@ -173,7 +180,9 @@ mod tests {
     #[test]
 
     fn issue_calls() {
-        let mut deps = default_deps(None);
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs.insert(Addr::unchecked("sub_2"));
+        }));
         outstanding_capital_calls(&mut deps.storage)
             .save(&vec![CapitalCall {
                 subscription: Addr::unchecked("sub_1"),

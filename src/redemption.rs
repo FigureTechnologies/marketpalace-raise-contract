@@ -19,6 +19,13 @@ pub fn try_issue_redemptions(
         return contract_error("only gp can issue redemptions");
     }
 
+    if redemptions
+        .iter()
+        .any(|redemption| !state.accepted_subs.contains(&redemption.subscription))
+    {
+        return contract_error("subscription not accepted");
+    }
+
     if let Some(mut existing) = outstanding_redemptions(deps.storage).may_load()? {
         redemptions.append(&mut existing)
     }
@@ -141,7 +148,9 @@ pub mod tests {
 
     #[test]
     fn issue_redemptions() {
-        let mut deps = default_deps(None);
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs.insert(Addr::unchecked("sub_2"));
+        }));
         outstanding_redemptions(&mut deps.storage)
             .save(&vec![Redemption {
                 subscription: Addr::unchecked("sub_1"),

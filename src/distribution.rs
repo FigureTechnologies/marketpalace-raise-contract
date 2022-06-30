@@ -19,6 +19,13 @@ pub fn try_issue_distributions(
         return contract_error("only gp can issue distributions");
     }
 
+    if distributions
+        .iter()
+        .any(|distribution| !state.accepted_subs.contains(&distribution.subscription))
+    {
+        return contract_error("subscription not accepted");
+    }
+
     if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {
         distributions.append(&mut existing)
     }
@@ -112,7 +119,9 @@ pub mod tests {
 
     #[test]
     fn issue_distributions() {
-        let mut deps = default_deps(None);
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs.insert(Addr::unchecked("sub_2"));
+        }));
         outstanding_distributions(&mut deps.storage)
             .save(&vec![Distribution {
                 subscription: Addr::unchecked("sub_1"),
