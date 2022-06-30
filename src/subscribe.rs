@@ -6,7 +6,6 @@ use crate::state::{config_read, Status};
 use crate::sub_msg::SubTerms;
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
 use cosmwasm_std::to_binary;
-use cosmwasm_std::Addr;
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
@@ -81,24 +80,34 @@ pub fn try_accept_subscriptions(
     }
 
     for accept in accepts.iter() {
-        let attributes = get_attributes(deps.as_ref(), accept.subscription.clone())?;
+        let terms: SubTerms = deps
+            .querier
+            .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetTerms {})?;
 
-        if !accept.is_retroactive {
-            if !state.acceptable_accreditations.is_empty()
-                && no_matches(&attributes, &state.acceptable_accreditations)
-            {
-                return contract_error(&format!(
-                    "subscription owner must have one of acceptable accreditations: {:?}",
-                    state.acceptable_accreditations
-                ));
-            }
+        let attributes = get_attributes(deps.as_ref(), &terms)?;
 
-            if missing_any(&attributes, &state.other_required_tags) {
-                return contract_error(&format!(
-                    "subscription owner must have all other required tags: {:?}",
-                    state.other_required_tags
-                ));
-            }
+        if !state.acceptable_accreditations.is_empty()
+            && no_matches(&attributes, &state.acceptable_accreditations)
+        {
+            return contract_error(&format!(
+                "subscription owner must have one of acceptable accreditations: {:?}",
+                state.acceptable_accreditations
+            ));
+        }
+
+        if missing_any(&attributes, &state.other_required_tags) {
+            return contract_error(&format!(
+                "subscription owner must have all other required tags: {:?}",
+                state.other_required_tags
+            ));
+        }
+
+        if accept.commitment < terms.min_commitment {
+            return contract_error("commitment less than minimum commitment");
+        }
+
+        if accept.commitment > terms.max_commitment {
+            return contract_error("commitment more than maximum commitment");
         }
 
         if state.not_evenly_divisble(accept.commitment) {
@@ -134,13 +143,9 @@ pub fn try_accept_subscriptions(
         })))
 }
 
-fn get_attributes(deps: Deps<ProvenanceQuery>, address: Addr) -> StdResult<HashSet<String>> {
-    let terms: SubTerms = deps
-        .querier
-        .query_wasm_smart(address, &SubQueryMsg::GetTerms {})?;
-
+fn get_attributes(deps: Deps<ProvenanceQuery>, terms: &SubTerms) -> StdResult<HashSet<String>> {
     Ok(ProvenanceQuerier::new(&deps.querier)
-        .get_attributes(terms.lp, None as Option<String>)
+        .get_attributes(terms.lp.clone(), None as Option<String>)
         .unwrap()
         .attributes
         .into_iter()
@@ -177,6 +182,7 @@ mod tests {
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::testing::MockApi;
     use cosmwasm_std::to_binary;
+    use cosmwasm_std::Addr;
     use cosmwasm_std::ContractResult;
     use cosmwasm_std::MemoryStorage;
     use cosmwasm_std::OwnedDeps;
@@ -269,7 +275,6 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_000,
-                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
@@ -321,7 +326,6 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_000,
-                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
@@ -348,7 +352,6 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_000,
-                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
@@ -375,7 +378,6 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_000,
-                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
@@ -401,7 +403,6 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment: 20_001,
-                    is_retroactive: false,
                 }]
                 .into_iter()
                 .collect(),
