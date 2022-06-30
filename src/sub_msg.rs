@@ -16,12 +16,6 @@ pub struct SubInstantiateMsg {
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SubExecuteMsg {
-    Accept {},
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum SubQueryMsg {
     GetTerms {},
     GetTransactions {},

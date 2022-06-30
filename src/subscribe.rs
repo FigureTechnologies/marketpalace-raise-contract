@@ -4,10 +4,8 @@ use crate::msg::AcceptSubscription;
 use crate::state::config;
 use crate::state::{config_read, Status};
 use crate::sub_msg::SubTerms;
-use crate::sub_msg::{SubExecuteMsg, SubInstantiateMsg, SubQueryMsg};
-use cosmwasm_std::coins;
+use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
 use cosmwasm_std::to_binary;
-use cosmwasm_std::wasm_execute;
 use cosmwasm_std::Addr;
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
@@ -17,6 +15,7 @@ use cosmwasm_std::Response;
 use cosmwasm_std::StdResult;
 use cosmwasm_std::SubMsg;
 use cosmwasm_std::WasmMsg;
+use cosmwasm_std::{coins, BankMsg};
 use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
 use provwasm_std::ProvenanceQuerier;
@@ -126,16 +125,12 @@ pub fn try_accept_subscriptions(
     Ok(Response::new()
         .add_message(mint)
         .add_message(withdraw)
-        .add_messages(accepts.into_iter().map(|accept| {
-            wasm_execute(
-                accept.subscription,
-                &SubExecuteMsg::Accept {},
-                coins(
-                    state.capital_to_shares(accept.commitment) as u128,
-                    state.commitment_denom.clone(),
-                ),
-            )
-            .unwrap()
+        .add_messages(accepts.into_iter().map(|accept| BankMsg::Send {
+            to_address: accept.subscription.into_string(),
+            amount: coins(
+                state.capital_to_shares(accept.commitment) as u128,
+                state.commitment_denom.clone(),
+            ),
         })))
 }
 
@@ -168,7 +163,7 @@ mod tests {
     use crate::contract::tests::default_deps;
     use crate::mock::mint_args;
     use crate::mock::msg_at_index;
-    use crate::mock::wasm_msg;
+    use crate::mock::send_args;
     use crate::mock::withdraw_args;
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::HandleMsg;
@@ -297,10 +292,10 @@ mod tests {
         assert_eq!("commitment_coin", coin.denom);
         assert_eq!("cosmos2contract", recipient.clone().into_string());
 
-        assert!(matches!(
-            wasm_msg(msg_at_index(&res, 2)),
-            WasmMsg::Execute { .. }
-        ));
+        let (to_address, funds) = send_args(msg_at_index(&res, 2));
+        assert_eq!("sub_1", to_address);
+        assert_eq!(200, funds.first().unwrap().amount.u128());
+        assert_eq!("commitment_coin", funds.first().unwrap().denom);
 
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
