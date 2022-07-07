@@ -12,7 +12,6 @@ use cosmwasm_std::Response;
 use provwasm_std::burn_marker_supply;
 use provwasm_std::mint_marker_supply;
 use provwasm_std::withdraw_coins;
-use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
 
 pub fn try_issue_calls(
@@ -138,15 +137,8 @@ pub fn try_claim_investment(
         ),
     };
 
-    let commitment_marker = ProvenanceQuerier::new(&deps.querier)
-        .get_marker_by_denom(state.commitment_denom.clone())?;
-    let deposit_commitment = BankMsg::Send {
-        to_address: commitment_marker.address.into_string(),
-        amount: coins(
-            state.capital_to_shares(call.amount).into(),
-            state.commitment_denom.clone(),
-        ),
-    };
+    let deposit_commitment =
+        state.deposit_commitment_msg(deps.as_ref(), state.capital_to_shares(call.amount).into())?;
     let burn_commitment = burn_marker_supply(
         state.capital_to_shares(call.amount).into(),
         state.commitment_denom,

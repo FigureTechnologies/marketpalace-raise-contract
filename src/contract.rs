@@ -10,6 +10,8 @@ use crate::redemption::try_cancel_redemptions;
 use crate::redemption::try_claim_redemption;
 use crate::redemption::try_issue_redemptions;
 use crate::subscribe::try_accept_subscriptions;
+use crate::subscribe::try_close_remaining_commitment;
+use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
 use cosmwasm_std::{
     coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
@@ -66,6 +68,10 @@ pub fn execute(
             min_commitment,
             max_commitment,
         } => try_propose_subscription(deps, env, info, min_commitment, max_commitment),
+        HandleMsg::CloseSubscriptions { subscriptions } => {
+            try_close_subscriptions(deps, info, subscriptions)
+        }
+        HandleMsg::CloseRemainingCommitment {} => try_close_remaining_commitment(deps, info),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, env, info, subscriptions)
         }

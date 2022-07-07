@@ -34,6 +34,10 @@ pub enum HandleMsg {
         min_commitment: u64,
         max_commitment: u64,
     },
+    CloseSubscriptions {
+        subscriptions: HashSet<Addr>,
+    },
+    CloseRemainingCommitment {},
     AcceptSubscriptions {
         subscriptions: HashSet<AcceptSubscription>,
     },

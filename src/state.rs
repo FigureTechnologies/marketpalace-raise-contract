@@ -1,14 +1,18 @@
+use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use cosmwasm_std::{Addr, Storage};
+use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 
 use crate::msg::{CapitalCall, Distribution, Redemption};
 
 pub static CONFIG_KEY: &[u8] = b"config";
+
+pub static SUBSCRIPTION_CLOSURES_KEY: &[u8] = b"subscription_closures";
+pub static CLOSED_SUBSCRIPTIONS_KEY: &[u8] = b"closed_subscriptions";
 pub static CAPITAL_CALLS_KEY: &[u8] = b"capital_calls";
 pub static REDEMPTIONS_KEY: &[u8] = b"redemptions";
 pub static DISTRIBUTIONS_KEY: &[u8] = b"distributions";
@@ -40,6 +44,30 @@ impl State {
 
     pub fn capital_to_shares(&self, amount: u64) -> u64 {
         amount / self.capital_per_share
+    }
+
+    pub fn remaining_commitment(
+        &self,
+        deps: Deps<ProvenanceQuery>,
+        subscription: &Addr,
+    ) -> StdResult<u128> {
+        deps.querier
+            .query_balance(subscription, self.commitment_denom.clone())
+            .map(|coin| coin.amount.u128())
+    }
+
+    pub fn deposit_commitment_msg(
+        &self,
+        deps: Deps<ProvenanceQuery>,
+        amount: u128,
+    ) -> StdResult<BankMsg> {
+        Ok(BankMsg::Send {
+            to_address: ProvenanceQuerier::new(&deps.querier)
+                .get_marker_by_denom(self.commitment_denom.clone())?
+                .address
+                .into_string(),
+            amount: coins(amount, self.commitment_denom.clone()),
+        })
     }
 }
 
@@ -76,6 +104,14 @@ pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
 
 pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
+}
+
+pub fn outstanding_subscription_closures(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
+    singleton(storage, SUBSCRIPTION_CLOSURES_KEY)
+}
+
+pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
+    singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
 }
 
 pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<Vec<CapitalCall>> {

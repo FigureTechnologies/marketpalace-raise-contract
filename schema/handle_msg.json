@@ -53,6 +53,42 @@
     {
       "type": "object",
       "required": [
+        "close_subscriptions"
+      ],
+      "properties": {
+        "close_subscriptions": {
+          "type": "object",
+          "required": [
+            "subscriptions"
+          ],
+          "properties": {
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "close_remaining_commitment"
+      ],
+      "properties": {
+        "close_remaining_commitment": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "accept_subscriptions"
       ],
       "properties": {

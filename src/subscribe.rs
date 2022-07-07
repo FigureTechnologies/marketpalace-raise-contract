@@ -1,11 +1,10 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::AcceptSubscription;
-use crate::state::config;
+use crate::state::{closed_subscriptions, config, outstanding_subscription_closures};
 use crate::state::{config_read, Status};
 use crate::sub_msg::SubTerms;
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
-use cosmwasm_std::to_binary;
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
@@ -15,10 +14,11 @@ use cosmwasm_std::StdResult;
 use cosmwasm_std::SubMsg;
 use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{coins, BankMsg};
-use provwasm_std::mint_marker_supply;
+use cosmwasm_std::{to_binary, Addr};
 use provwasm_std::withdraw_coins;
 use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
+use provwasm_std::{burn_marker_supply, mint_marker_supply};
 use std::collections::HashSet;
 
 pub fn try_propose_subscription(
@@ -65,6 +65,74 @@ pub fn try_propose_subscription(
     );
 
     Ok(Response::new().add_submessage(create_sub))
+}
+
+pub fn try_close_subscriptions(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    subscriptions: HashSet<Addr>,
+) -> ContractResponse {
+    let mut state = config(deps.storage).load()?;
+    let mut subscription_closures = outstanding_subscription_closures(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+
+    if info.sender != state.gp {
+        return contract_error("only gp can close subscriptions");
+    }
+
+    for subscription in subscriptions {
+        if !state.pending_review_subs.remove(&subscription) {
+            if state.accepted_subs.contains(&subscription) {
+                if state.remaining_commitment(deps.as_ref(), &subscription)? == 0 {
+                    state.accepted_subs.remove(&subscription);
+                } else {
+                    subscription_closures.insert(subscription);
+                }
+            } else {
+                return contract_error("no subscription pending or accepted to close");
+            }
+        }
+    }
+
+    config(deps.storage).save(&state)?;
+    outstanding_subscription_closures(deps.storage).save(&subscription_closures)?;
+
+    Ok(Response::new())
+}
+
+pub fn try_close_remaining_commitment(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    let mut closures = outstanding_subscription_closures(deps.storage).load()?;
+    if !closures.remove(&info.sender) {
+        return contract_error("no close for subscription");
+    }
+    outstanding_subscription_closures(deps.storage).save(&closures)?;
+
+    let mut closed = closed_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    closed.insert(info.sender.clone());
+    closed_subscriptions(deps.storage).save(&closed)?;
+
+    if state.remaining_commitment(deps.as_ref(), &info.sender)? > 0 {
+        return contract_error("commitment balance must be zero");
+    }
+
+    let deposit_commitment =
+        state.deposit_commitment_msg(deps.as_ref(), info.funds.first().unwrap().amount.u128())?;
+    let burn_commitment = burn_marker_supply(
+        info.funds.first().unwrap().amount.u128(),
+        state.commitment_denom,
+    )?;
+
+    Ok(Response::new()
+        .add_message(deposit_commitment)
+        .add_message(burn_commitment))
 }
 
 pub fn try_accept_subscriptions(
@@ -166,6 +234,8 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
+    use crate::mock::burn_args;
+    use crate::mock::load_markers;
     use crate::mock::mint_args;
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
@@ -255,6 +325,226 @@ mod tests {
                 max_commitment: 100_000,
             },
         );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn close_subscriptions_pending() {
+        let mut deps = default_deps(Some(|state| {
+            state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+
+        // close sub as gp
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+            },
+        )
+        .unwrap();
+
+        // verify pending sub is removed
+        assert_eq!(
+            0,
+            config(&mut deps.storage)
+                .load()
+                .unwrap()
+                .pending_review_subs
+                .len()
+        )
+    }
+
+    #[test]
+    fn close_subscriptions_accepted_no_commitment() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+
+        // close sub as gp
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+            },
+        )
+        .unwrap();
+
+        // verify accepted sub is removed
+        assert_eq!(
+            0,
+            config(&mut deps.storage)
+                .load()
+                .unwrap()
+                .accepted_subs
+                .len()
+        )
+    }
+
+    #[test]
+    fn close_subscriptions_accepted_commitment() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(100, "commitment_coin"));
+
+        // close sub as gp
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+            },
+        )
+        .unwrap();
+
+        // verify accepted sub remains
+        assert_eq!(
+            1,
+            config(&mut deps.storage)
+                .load()
+                .unwrap()
+                .accepted_subs
+                .len()
+        );
+        // verify outsounding sub closure exists
+        assert_eq!(
+            1,
+            outstanding_subscription_closures(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn close_subscriptions_bad_actor() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+
+        // close sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn close_subscriptions_not_found() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+
+        // close sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_2")].into_iter().collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn close_remaining_commitment() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_subscription_closures(&mut deps.storage)
+            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .unwrap();
+
+        // close remaining commitment
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(100, "commitment_coin")),
+            HandleMsg::CloseRemainingCommitment {},
+        )
+        .unwrap();
+
+        assert_eq!(2, res.messages.len());
+
+        // verify deposit commitment
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
+        assert_eq!("commitment_coin", coins.first().unwrap().denom);
+        assert_eq!(100, coins.first().unwrap().amount.u128());
+
+        // verify burn commitment
+        let coin = burn_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(100, coin.amount.u128());
+
+        // verify outsounding sub closure removed
+        assert_eq!(
+            0,
+            outstanding_subscription_closures(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+        // verify closed sub exists
+        assert_eq!(
+            1,
+            closed_subscriptions(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn close_remaining_commitment_not_found() {
+        let mut deps = default_deps(None);
+        outstanding_subscription_closures(&mut deps.storage)
+            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .unwrap();
+
+        // close remaining commitment
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_2", &coins(100, "commitment_coin")),
+            HandleMsg::CloseRemainingCommitment {},
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn close_remaining_commitment_leftover() {
+        let mut deps = default_deps(None);
+        outstanding_subscription_closures(&mut deps.storage)
+            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .unwrap();
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(100, "commitment_coin"));
+
+        // close remaining commitment
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(100, "commitment_coin")),
+            HandleMsg::CloseRemainingCommitment {},
+        );
+
         assert!(res.is_err());
     }
 
