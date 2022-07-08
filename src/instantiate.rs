@@ -89,6 +89,7 @@ mod tests {
     use crate::msg::QueryMsg;
     use crate::msg::Terms;
     use crate::query::query;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::{from_binary, Addr};
     use provwasm_mocks::mock_dependencies;
@@ -162,8 +163,14 @@ mod tests {
         let terms: Terms = from_binary(&res).unwrap();
         assert_eq!(0, terms.acceptable_accreditations.len());
         assert_eq!(0, terms.other_required_tags.len());
-        assert_eq!("cosmos2contract.commitment", terms.commitment_denom);
-        assert_eq!("cosmos2contract.investment", terms.investment_denom);
+        assert_eq!(
+            format!("{}.commitment", MOCK_CONTRACT_ADDR),
+            terms.commitment_denom
+        );
+        assert_eq!(
+            format!("{}.investment", MOCK_CONTRACT_ADDR),
+            terms.investment_denom
+        );
         assert_eq!("stable_coin", terms.capital_denom);
         assert_eq!(10_000, terms.min_commitment.unwrap());
         assert_eq!(100_000, terms.max_commitment.unwrap());

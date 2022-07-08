@@ -166,6 +166,7 @@ mod tests {
     use cosmwasm_std::coin;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
 
@@ -212,7 +213,7 @@ mod tests {
         assert_eq!("investment_coin", marker_denom);
         assert_eq!(200, coin.amount.u128());
         assert_eq!("investment_coin", coin.denom);
-        assert_eq!("cosmos2contract", recipient.clone().into_string());
+        assert_eq!(MOCK_CONTRACT_ADDR, recipient.clone().into_string());
 
         // verify capital call is saved
         assert_eq!(

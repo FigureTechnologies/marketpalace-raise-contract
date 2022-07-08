@@ -251,6 +251,7 @@ mod tests {
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::testing::MockApi;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
     use cosmwasm_std::ContractResult;
@@ -585,7 +586,7 @@ mod tests {
         assert_eq!("commitment_coin", marker_denom);
         assert_eq!(200, coin.amount.u128());
         assert_eq!("commitment_coin", coin.denom);
-        assert_eq!("cosmos2contract", recipient.clone().into_string());
+        assert_eq!(MOCK_CONTRACT_ADDR, recipient.clone().into_string());
 
         let (to_address, funds) = send_args(msg_at_index(&res, 2));
         assert_eq!("sub_1", to_address);
