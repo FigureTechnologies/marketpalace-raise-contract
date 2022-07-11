@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     tags:
       - 'v*.*.*'
+      - 't*.*.*'
   pull_request:
     branches: [ main ]
 
@@ -57,6 +58,23 @@ jobs:
       - name: optimize
         run: make optimize
       - name : release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            artifacts/marketpalace_raise_contract.wasm
+            artifacts/checksums.txt
+  test-release:
+    needs: check
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/t')
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: optimize
+        run: make optimize
+      - name : test-release
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
