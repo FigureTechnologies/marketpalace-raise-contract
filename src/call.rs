@@ -390,17 +390,22 @@ mod tests {
         // verify send investment
         let (to_address, coins) = send_args(msg_at_index(&res, 0));
         assert_eq!("sub_1", to_address);
-        assert_eq!("investment_coin", coins.first().unwrap().denom);
-        assert_eq!(100, coins.first().unwrap().amount.u128());
+        assert_eq!(1, coins.len());
+        let coin = coins.first().unwrap();
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!(100, coin.amount.u128());
 
         // verify deposit commitment
         let (to_address, coins) = send_args(msg_at_index(&res, 1));
         assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
-        assert_eq!("commitment_coin", coins.first().unwrap().denom);
-        assert_eq!(100, coins.first().unwrap().amount.u128());
+        assert_eq!(1, coins.len());
+        let coin = coins.first().unwrap();
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(100, coin.amount.u128());
 
         // verify burn commitment
         let coin = burn_args(msg_at_index(&res, 2));
+        assert_eq!(1, coins.len());
         assert_eq!("commitment_coin", coin.denom);
         assert_eq!(100, coin.amount.u128());
     }

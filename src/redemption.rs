@@ -115,7 +115,7 @@ pub fn try_claim_redemption(
     };
 
     let investment_marker = ProvenanceQuerier::new(&deps.querier)
-        .get_marker_by_denom(state.commitment_denom.clone())?;
+        .get_marker_by_denom(state.investment_denom.clone())?;
     let deposit_investment = BankMsg::Send {
         to_address: investment_marker.address.into_string(),
         amount: coins(redemption.asset.into(), state.investment_denom.clone()),
@@ -360,7 +360,7 @@ pub mod tests {
 
         // verify deposit investment
         let (to_address, coins) = send_args(msg_at_index(&res, 1));
-        assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
+        assert_eq!("tp18vd8fpwxzck93qlwghaj6arh4p7c5n89x8kskz", to_address);
         assert_eq!("investment_coin", coins.first().unwrap().denom);
         assert_eq!(5_000, coins.first().unwrap().amount.u128());
 
