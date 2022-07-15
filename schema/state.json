@@ -10,11 +10,9 @@
     "commitment_denom",
     "gp",
     "investment_denom",
-    "issued_withdrawals",
     "other_required_tags",
     "pending_review_subs",
     "recovery_admin",
-    "sequence",
     "status",
     "subscription_code_id"
   ],
@@ -50,13 +48,6 @@
     "investment_denom": {
       "type": "string"
     },
-    "issued_withdrawals": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/Withdrawal"
-      },
-      "uniqueItems": true
-    },
     "max_commitment": {
       "type": [
         "integer",
@@ -90,11 +81,6 @@
     "recovery_admin": {
       "$ref": "#/definitions/Addr"
     },
-    "sequence": {
-      "type": "integer",
-      "format": "uint16",
-      "minimum": 0.0
-    },
     "status": {
       "$ref": "#/definitions/Status"
     },
@@ -114,29 +100,6 @@
       "enum": [
         "Active"
       ]
-    },
-    "Withdrawal": {
-      "type": "object",
-      "required": [
-        "amount",
-        "sequence",
-        "to"
-      ],
-      "properties": {
-        "amount": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "sequence": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "to": {
-          "$ref": "#/definitions/Addr"
-        }
-      }
     }
   }
 }

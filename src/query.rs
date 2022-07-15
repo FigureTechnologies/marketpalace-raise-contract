@@ -1,7 +1,7 @@
 use cosmwasm_std::{entry_point, to_binary, Binary, Deps, Env, StdResult};
 use provwasm_std::ProvenanceQuery;
 
-use crate::msg::{QueryMsg, Subs, Terms, Transactions};
+use crate::msg::{QueryMsg, Subs, Terms};
 use crate::state::config_read;
 
 #[entry_point]
@@ -23,9 +23,6 @@ pub fn query(deps: Deps<ProvenanceQuery>, _env: Env, msg: QueryMsg) -> StdResult
         QueryMsg::GetSubs {} => to_binary(&Subs {
             pending_review: state.pending_review_subs,
             accepted: state.accepted_subs,
-        }),
-        QueryMsg::GetTransactions {} => to_binary(&Transactions {
-            withdrawals: state.issued_withdrawals,
         }),
     }
 }

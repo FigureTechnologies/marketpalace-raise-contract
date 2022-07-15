@@ -38,10 +38,8 @@ pub fn instantiate(
         capital_per_share: msg.capital_per_share,
         min_commitment: msg.min_commitment,
         max_commitment: msg.max_commitment,
-        sequence: 0,
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
-        issued_withdrawals: HashSet::new(),
     };
 
     if let Some(min_commitment) = msg.min_commitment {

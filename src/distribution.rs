@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::ProvenanceQuery;
 
@@ -11,7 +13,7 @@ use crate::{
 pub fn try_issue_distributions(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    mut distributions: Vec<Distribution>,
+    distributions: HashSet<Distribution>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -26,9 +28,13 @@ pub fn try_issue_distributions(
         return contract_error("subscription not accepted");
     }
 
-    if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {
-        distributions.append(&mut existing)
-    }
+    let existing_distributions = outstanding_distributions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let distributions = existing_distributions
+        .union(&distributions)
+        .cloned()
+        .collect();
 
     outstanding_distributions(deps.storage).save(&distributions)?;
 
@@ -38,7 +44,7 @@ pub fn try_issue_distributions(
 pub fn try_cancel_distributions(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    distributions: Vec<Distribution>,
+    subscriptions: HashSet<Addr>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -47,14 +53,14 @@ pub fn try_cancel_distributions(
     }
 
     if let Some(mut existing) = outstanding_distributions(deps.storage).may_load()? {
-        for distribution in distributions {
-            if let Some(index) = existing.iter().position(|it| {
-                it.subscription == distribution.subscription && it.amount == distribution.amount
-            }) {
-                existing.remove(index)
-            } else {
-                return contract_error("no distribution found");
-            };
+        for subscription in subscriptions {
+            existing
+                .take(&Distribution {
+                    subscription,
+                    amount: 0,
+                    available_epoch_seconds: None,
+                })
+                .ok_or("no distribution found")?;
         }
 
         outstanding_distributions(deps.storage).save(&existing)?;
@@ -69,21 +75,19 @@ pub fn try_claim_distribution(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    amount: u64,
     to: Addr,
     memo: Option<String>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     let mut distributions = outstanding_distributions(deps.storage).load()?;
-    let distribution = if let Some(index) = distributions
-        .iter()
-        .position(|it| it.subscription == info.sender && it.amount == amount)
-    {
-        distributions.remove(index)
-    } else {
-        return contract_error("no distribution for subscription");
-    };
+    let distribution = distributions
+        .take(&Distribution {
+            subscription: info.sender,
+            amount: 0,
+            available_epoch_seconds: None,
+        })
+        .ok_or("no distribution found")?;
 
     if let Some(available) = distribution.available_epoch_seconds {
         if available > env.block.time.seconds() {
@@ -123,11 +127,15 @@ pub mod tests {
             state.accepted_subs.insert(Addr::unchecked("sub_2"));
         }));
         outstanding_distributions(&mut deps.storage)
-            .save(&vec![Distribution {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                available_epoch_seconds: None,
-            }])
+            .save(
+                &vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    available_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         execute(
@@ -163,7 +171,7 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueDistributions {
-                distributions: vec![],
+                distributions: HashSet::new(),
             },
         );
 
@@ -181,7 +189,9 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     amount: 10_000,
                     available_epoch_seconds: None,
-                }],
+                }]
+                .into_iter()
+                .collect(),
             },
         );
 
@@ -192,11 +202,15 @@ pub mod tests {
     fn cancel_distributions() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)
-            .save(&vec![Distribution {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                available_epoch_seconds: None,
-            }])
+            .save(
+                &vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    available_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         execute(
@@ -204,13 +218,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &vec![]),
             HandleMsg::CancelDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    available_epoch_seconds: None,
-                }]
-                .into_iter()
-                .collect(),
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         )
         .unwrap();
@@ -232,7 +240,7 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::CancelDistributions {
-                distributions: vec![],
+                subscriptions: HashSet::new(),
             },
         );
 
@@ -246,7 +254,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelDistributions {
-                distributions: vec![],
+                subscriptions: HashSet::new(),
             },
         );
 
@@ -257,7 +265,7 @@ pub mod tests {
     fn cancel_distributions_not_found() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)
-            .save(&vec![])
+            .save(&HashSet::new())
             .unwrap();
 
         let res = execute(
@@ -265,11 +273,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    available_epoch_seconds: None,
-                }],
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         );
 
@@ -280,18 +284,22 @@ pub mod tests {
     fn claim_distribution() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)
-            .save(&vec![
-                Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    available_epoch_seconds: None,
-                },
-                Distribution {
-                    subscription: Addr::unchecked("sub_2"),
-                    amount: 10_000,
-                    available_epoch_seconds: None,
-                },
-            ])
+            .save(
+                &vec![
+                    Distribution {
+                        subscription: Addr::unchecked("sub_1"),
+                        amount: 10_000,
+                        available_epoch_seconds: None,
+                    },
+                    Distribution {
+                        subscription: Addr::unchecked("sub_2"),
+                        amount: 10_000,
+                        available_epoch_seconds: None,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         let res = execute(
@@ -299,7 +307,6 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &vec![]),
             HandleMsg::ClaimDistribution {
-                amount: 10_000,
                 to: Addr::unchecked("destination"),
                 memo: Some(String::from("note")),
             },
@@ -332,11 +339,15 @@ pub mod tests {
     fn claim_distribution_not_available_yet() {
         let mut deps = default_deps(None);
         outstanding_distributions(&mut deps.storage)
-            .save(&vec![Distribution {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
-            }])
+            .save(
+                &vec![Distribution {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
         let mut env = mock_env();
         env.block.time = Timestamp::from_seconds(1672531200); // Jan 01 2023 UTC
@@ -346,7 +357,6 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &vec![]),
             HandleMsg::ClaimDistribution {
-                amount: 10_000,
                 to: Addr::unchecked("destination"),
                 memo: Some(String::from("note")),
             },

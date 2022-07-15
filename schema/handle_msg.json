@@ -126,7 +126,8 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/CapitalCall"
-              }
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -142,14 +143,15 @@
         "cancel_capital_calls": {
           "type": "object",
           "required": [
-            "calls"
+            "subscriptions"
           ],
           "properties": {
-            "calls": {
+            "subscriptions": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/CapitalCall"
-              }
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -163,17 +165,7 @@
       ],
       "properties": {
         "claim_investment": {
-          "type": "object",
-          "required": [
-            "amount"
-          ],
-          "properties": {
-            "amount": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            }
-          }
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -194,7 +186,8 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Redemption"
-              }
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -210,14 +203,15 @@
         "cancel_redemptions": {
           "type": "object",
           "required": [
-            "redemptions"
+            "subscriptions"
           ],
           "properties": {
-            "redemptions": {
+            "subscriptions": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/Redemption"
-              }
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -233,21 +227,9 @@
         "claim_redemption": {
           "type": "object",
           "required": [
-            "asset",
-            "capital",
             "to"
           ],
           "properties": {
-            "asset": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "capital": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
             "memo": {
               "type": [
                 "string",
@@ -278,7 +260,8 @@
               "type": "array",
               "items": {
                 "$ref": "#/definitions/Distribution"
-              }
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -294,14 +277,15 @@
         "cancel_distributions": {
           "type": "object",
           "required": [
-            "distributions"
+            "subscriptions"
           ],
           "properties": {
-            "distributions": {
+            "subscriptions": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/Distribution"
-              }
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
             }
           }
         }
@@ -317,15 +301,9 @@
         "claim_distribution": {
           "type": "object",
           "required": [
-            "amount",
             "to"
           ],
           "properties": {
-            "amount": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
             "memo": {
               "type": [
                 "string",

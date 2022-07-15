@@ -22,7 +22,7 @@ use provwasm_std::ProvenanceQuery;
 
 use crate::error::ContractError;
 use crate::msg::HandleMsg;
-use crate::state::{config, Withdrawal};
+use crate::state::config;
 
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
@@ -76,28 +76,25 @@ pub fn execute(
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, env, info, calls),
-        HandleMsg::CancelCapitalCalls { calls } => try_cancel_calls(deps, info, calls),
-        HandleMsg::ClaimInvestment { amount } => try_claim_investment(deps, env, info, amount),
+        HandleMsg::CancelCapitalCalls { subscriptions } => {
+            try_cancel_calls(deps, info, subscriptions)
+        }
+        HandleMsg::ClaimInvestment {} => try_claim_investment(deps, env, info),
         HandleMsg::IssueRedemptions { redemptions } => {
             try_issue_redemptions(deps, info, redemptions)
         }
-        HandleMsg::CancelRedemptions { redemptions } => {
-            try_cancel_redemptions(deps, info, redemptions)
+        HandleMsg::CancelRedemptions { subscriptions } => {
+            try_cancel_redemptions(deps, info, subscriptions)
         }
-        HandleMsg::ClaimRedemption {
-            asset,
-            capital,
-            to,
-            memo,
-        } => try_claim_redemption(deps, env, info, asset, capital, to, memo),
+        HandleMsg::ClaimRedemption { to, memo } => try_claim_redemption(deps, env, info, to, memo),
         HandleMsg::IssueDistributions { distributions } => {
             try_issue_distributions(deps, info, distributions)
         }
-        HandleMsg::CancelDistributions { distributions } => {
-            try_cancel_distributions(deps, info, distributions)
+        HandleMsg::CancelDistributions { subscriptions } => {
+            try_cancel_distributions(deps, info, subscriptions)
         }
-        HandleMsg::ClaimDistribution { amount, to, memo } => {
-            try_claim_distribution(deps, env, info, amount, to, memo)
+        HandleMsg::ClaimDistribution { to, memo } => {
+            try_claim_distribution(deps, env, info, to, memo)
         }
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)
@@ -108,46 +105,30 @@ pub fn execute(
 pub fn try_issue_withdrawal(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    env: Env,
+    _env: Env,
     to: Addr,
     amount: u64,
     memo: Option<String>,
 ) -> ContractResponse {
-    let mut state = config(deps.storage).load()?;
+    let state = config(deps.storage).load()?;
 
     if info.sender != state.gp {
         return contract_error("only gp can redeem capital");
     }
-
-    state.sequence += 1;
-    state.issued_withdrawals.insert(Withdrawal {
-        sequence: state.sequence,
-        to: to.clone(),
-        amount,
-    });
-    config(deps.storage).save(&state)?;
 
     let send = BankMsg::Send {
         to_address: to.to_string(),
         amount: coins(amount as u128, state.capital_denom),
     };
 
-    let sequence_attribute = Attribute {
-        key: format!("{}.withdrawal.sequence", env.contract.address),
-        value: format!("{}", state.sequence),
-    };
-
     let attributes = match memo {
         Some(memo) => {
-            vec![
-                Attribute {
-                    key: String::from("memo"),
-                    value: memo,
-                },
-                sequence_attribute,
-            ]
+            vec![Attribute {
+                key: String::from("memo"),
+                value: memo,
+            }]
         }
-        None => vec![sequence_attribute],
+        None => vec![],
     };
 
     Ok(Response::new().add_message(send).add_attributes(attributes))

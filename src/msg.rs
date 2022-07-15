@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use crate::state::Withdrawal;
 use cosmwasm_std::Addr;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -42,34 +41,29 @@ pub enum HandleMsg {
         subscriptions: HashSet<AcceptSubscription>,
     },
     IssueCapitalCalls {
-        calls: Vec<CapitalCall>,
+        calls: HashSet<CapitalCall>,
     },
     CancelCapitalCalls {
-        calls: Vec<CapitalCall>,
+        subscriptions: HashSet<Addr>,
     },
-    ClaimInvestment {
-        amount: u64,
-    },
+    ClaimInvestment {},
     IssueRedemptions {
-        redemptions: Vec<Redemption>,
+        redemptions: HashSet<Redemption>,
     },
     CancelRedemptions {
-        redemptions: Vec<Redemption>,
+        subscriptions: HashSet<Addr>,
     },
     ClaimRedemption {
-        asset: u64,
-        capital: u64,
         to: Addr,
         memo: Option<String>,
     },
     IssueDistributions {
-        distributions: Vec<Distribution>,
+        distributions: HashSet<Distribution>,
     },
     CancelDistributions {
-        distributions: Vec<Distribution>,
+        subscriptions: HashSet<Addr>,
     },
     ClaimDistribution {
-        amount: u64,
         to: Addr,
         memo: Option<String>,
     },
@@ -101,7 +95,7 @@ impl Hash for AcceptSubscription {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Clone, Eq, Debug, JsonSchema)]
 pub struct CapitalCall {
     pub subscription: Addr,
     pub amount: u64,
@@ -174,7 +168,6 @@ pub enum QueryMsg {
     GetStatus {},
     GetTerms {},
     GetSubs {},
-    GetTransactions {},
 }
 
 #[derive(Deserialize, Serialize)]
@@ -193,9 +186,4 @@ pub struct Terms {
 pub struct Subs {
     pub pending_review: HashSet<Addr>,
     pub accepted: HashSet<Addr>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Transactions {
-    pub withdrawals: HashSet<Withdrawal>,
 }

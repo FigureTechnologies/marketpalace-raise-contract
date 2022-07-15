@@ -31,10 +31,8 @@ pub struct State {
     pub capital_per_share: u64,
     pub min_commitment: Option<u64>,
     pub max_commitment: Option<u64>,
-    pub sequence: u16,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
-    pub issued_withdrawals: HashSet<Withdrawal>,
 }
 
 impl State {
@@ -114,15 +112,15 @@ pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr
     singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
 }
 
-pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<Vec<CapitalCall>> {
+pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<HashSet<CapitalCall>> {
     singleton(storage, CAPITAL_CALLS_KEY)
 }
 
-pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<Vec<Redemption>> {
+pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<HashSet<Redemption>> {
     singleton(storage, REDEMPTIONS_KEY)
 }
 
-pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<Vec<Distribution>> {
+pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<HashSet<Distribution>> {
     singleton(storage, DISTRIBUTIONS_KEY)
 }
 
@@ -145,10 +143,8 @@ mod tests {
                 capital_per_share: 100,
                 min_commitment: Some(10_000),
                 max_commitment: Some(100_000),
-                sequence: 0,
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
-                issued_withdrawals: HashSet::new(),
             }
         }
     }

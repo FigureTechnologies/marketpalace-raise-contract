@@ -37,18 +37,6 @@
         }
       },
       "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_transactions"
-      ],
-      "properties": {
-        "get_transactions": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
     }
   ]
 }

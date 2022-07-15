@@ -1,9 +1,12 @@
+use std::collections::HashSet;
+
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::CapitalCall;
 use crate::state::config_read;
 use crate::state::outstanding_capital_calls;
 use cosmwasm_std::coins;
+use cosmwasm_std::Addr;
 use cosmwasm_std::BankMsg;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
@@ -18,7 +21,7 @@ pub fn try_issue_calls(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    mut calls: Vec<CapitalCall>,
+    calls: HashSet<CapitalCall>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -33,9 +36,10 @@ pub fn try_issue_calls(
         return contract_error("subscription not accepted");
     }
 
-    if let Some(mut existing) = outstanding_capital_calls(deps.storage).may_load()? {
-        calls.append(&mut existing)
-    }
+    let existing_calls = outstanding_capital_calls(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let calls = existing_calls.union(&calls).cloned().collect();
 
     outstanding_capital_calls(deps.storage).save(&calls)?;
 
@@ -55,7 +59,7 @@ pub fn try_issue_calls(
 pub fn try_cancel_calls(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    calls: Vec<CapitalCall>,
+    subscriptions: HashSet<Addr>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -64,15 +68,14 @@ pub fn try_cancel_calls(
     }
 
     if let Some(mut existing) = outstanding_capital_calls(deps.storage).may_load()? {
-        for call in calls {
-            if let Some(index) = existing
-                .iter()
-                .position(|it| it.subscription == call.subscription && it.amount == call.amount)
-            {
-                existing.remove(index)
-            } else {
-                return contract_error("no capital call found");
-            };
+        for subscription in subscriptions {
+            existing
+                .take(&CapitalCall {
+                    subscription,
+                    amount: 0,
+                    due_epoch_seconds: None,
+                })
+                .ok_or("no capital call for subscription")?;
         }
 
         outstanding_capital_calls(deps.storage).save(&existing)?;
@@ -87,19 +90,17 @@ pub fn try_claim_investment(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    amount: u64,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     let mut calls = outstanding_capital_calls(deps.storage).load()?;
-    let call = if let Some(index) = calls
-        .iter()
-        .position(|it| it.subscription == info.sender && it.amount == amount)
-    {
-        calls.remove(index)
-    } else {
-        return contract_error("no capital call for subscription");
-    };
+    let call = calls
+        .take(&CapitalCall {
+            subscription: info.sender,
+            amount: 0,
+            due_epoch_seconds: None,
+        })
+        .ok_or("no capital call for subscription")?;
 
     if let Some(due) = call.due_epoch_seconds {
         if due < env.block.time.seconds() {
@@ -152,6 +153,8 @@ pub fn try_claim_investment(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
     use crate::mock::burn_args;
@@ -177,11 +180,15 @@ mod tests {
             state.accepted_subs.insert(Addr::unchecked("sub_2"));
         }));
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: None,
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         // issue calls
@@ -235,7 +242,9 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("bad_actor", &[]),
-            HandleMsg::IssueCapitalCalls { calls: vec![] },
+            HandleMsg::IssueCapitalCalls {
+                calls: HashSet::new(),
+            },
         );
 
         assert!(res.is_err());
@@ -270,11 +279,15 @@ mod tests {
     fn cancel_calls() {
         let mut deps = default_deps(None);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: None,
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         // cancel calls
@@ -283,13 +296,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CancelCapitalCalls {
-                calls: vec![CapitalCall {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    due_epoch_seconds: None,
-                }]
-                .into_iter()
-                .collect(),
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         )
         .unwrap();
@@ -314,7 +321,9 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("bad_actor", &[]),
-            HandleMsg::CancelCapitalCalls { calls: vec![] },
+            HandleMsg::CancelCapitalCalls {
+                subscriptions: HashSet::new(),
+            },
         );
 
         assert!(res.is_err());
@@ -330,7 +339,9 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
-            HandleMsg::CancelCapitalCalls { calls: vec![] },
+            HandleMsg::CancelCapitalCalls {
+                subscriptions: HashSet::new(),
+            },
         );
 
         assert!(res.is_err());
@@ -341,7 +352,7 @@ mod tests {
     fn cancel_calls_not_found() {
         let mut deps = default_deps(None);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![])
+            .save(&HashSet::new())
             .unwrap();
 
         // issue calls
@@ -350,11 +361,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CancelCapitalCalls {
-                calls: vec![CapitalCall {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                    due_epoch_seconds: None,
-                }],
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         );
 
@@ -366,11 +373,15 @@ mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: None,
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         // claim investment
@@ -381,7 +392,7 @@ mod tests {
                 "sub_1",
                 &vec![coin(100, "commitment_coin"), coin(10_000, "stable_coin")],
             ),
-            HandleMsg::ClaimInvestment { amount: 10_000 },
+            HandleMsg::ClaimInvestment {},
         )
         .unwrap();
 
@@ -415,11 +426,15 @@ mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: None,
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         // claim investment
@@ -427,7 +442,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("sub_1", &vec![coin(10_000, "stable_coin")]),
-            HandleMsg::ClaimInvestment { amount: 10_000 },
+            HandleMsg::ClaimInvestment {},
         );
 
         assert!(res.is_err());
@@ -438,11 +453,15 @@ mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: Some(1672531200), // Jan 01 2023 UTC
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: Some(1672531200), // Jan 01 2023 UTC
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
         let mut env = mock_env();
         env.block.time = Timestamp::from_seconds(1675209600); // Feb 01 2023 UTC
@@ -455,7 +474,7 @@ mod tests {
                 "sub_1",
                 &vec![coin(100, "commitment_coin"), coin(10_000, "stable_coin")],
             ),
-            HandleMsg::ClaimInvestment { amount: 10_000 },
+            HandleMsg::ClaimInvestment {},
         );
 
         assert!(res.is_err())
@@ -466,11 +485,15 @@ mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_capital_calls(&mut deps.storage)
-            .save(&vec![CapitalCall {
-                subscription: Addr::unchecked("sub_1"),
-                amount: 10_000,
-                due_epoch_seconds: None,
-            }])
+            .save(
+                &vec![CapitalCall {
+                    subscription: Addr::unchecked("sub_1"),
+                    amount: 10_000,
+                    due_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         // close call
@@ -478,7 +501,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("sub_1", &vec![coin(10_000, "commitment_coin")]),
-            HandleMsg::ClaimInvestment { amount: 10_000 },
+            HandleMsg::ClaimInvestment {},
         );
 
         assert!(res.is_err());

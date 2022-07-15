@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{burn_marker_supply, ProvenanceQuerier, ProvenanceQuery};
 
@@ -11,7 +13,7 @@ use crate::{
 pub fn try_issue_redemptions(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    mut redemptions: Vec<Redemption>,
+    redemptions: HashSet<Redemption>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -26,9 +28,10 @@ pub fn try_issue_redemptions(
         return contract_error("subscription not accepted");
     }
 
-    if let Some(mut existing) = outstanding_redemptions(deps.storage).may_load()? {
-        redemptions.append(&mut existing)
-    }
+    let existing_redemptions = outstanding_redemptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let redemptions = existing_redemptions.union(&redemptions).cloned().collect();
 
     outstanding_redemptions(deps.storage).save(&redemptions)?;
 
@@ -38,7 +41,7 @@ pub fn try_issue_redemptions(
 pub fn try_cancel_redemptions(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
-    redemptions: Vec<Redemption>,
+    subscriptions: HashSet<Addr>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -47,16 +50,15 @@ pub fn try_cancel_redemptions(
     }
 
     if let Some(mut existing) = outstanding_redemptions(deps.storage).may_load()? {
-        for redemption in redemptions {
-            if let Some(index) = existing.iter().position(|it| {
-                it.subscription == redemption.subscription
-                    && it.asset == redemption.asset
-                    && it.capital == redemption.capital
-            }) {
-                existing.remove(index)
-            } else {
-                return contract_error("no redemption found");
-            };
+        for subscription in subscriptions {
+            existing
+                .take(&Redemption {
+                    subscription,
+                    asset: 0,
+                    capital: 0,
+                    available_epoch_seconds: None,
+                })
+                .ok_or("no redemption found")?;
         }
 
         outstanding_redemptions(deps.storage).save(&existing)?;
@@ -71,22 +73,20 @@ pub fn try_claim_redemption(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    asset: u64,
-    capital: u64,
     to: Addr,
     memo: Option<String>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
     let mut redemptions = outstanding_redemptions(deps.storage).load()?;
-    let redemption = if let Some(index) = redemptions
-        .iter()
-        .position(|it| it.subscription == info.sender && it.asset == asset && it.capital == capital)
-    {
-        redemptions.remove(index)
-    } else {
-        return contract_error("no redemption for subscription");
-    };
+    let redemption = redemptions
+        .take(&Redemption {
+            subscription: info.sender,
+            asset: 0,
+            capital: 0,
+            available_epoch_seconds: None,
+        })
+        .ok_or("no redemption found")?;
 
     if let Some(available) = redemption.available_epoch_seconds {
         if available > env.block.time.seconds() {
@@ -152,12 +152,16 @@ pub mod tests {
             state.accepted_subs.insert(Addr::unchecked("sub_2"));
         }));
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![Redemption {
-                subscription: Addr::unchecked("sub_1"),
-                capital: 10_000,
-                asset: 5_000,
-                available_epoch_seconds: None,
-            }])
+            .save(
+                &vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    capital: 10_000,
+                    asset: 5_000,
+                    available_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         execute(
@@ -194,7 +198,7 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::IssueRedemptions {
-                redemptions: vec![],
+                redemptions: HashSet::new(),
             },
         );
 
@@ -213,7 +217,9 @@ pub mod tests {
                     asset: 100,
                     capital: 10_000,
                     available_epoch_seconds: None,
-                }],
+                }]
+                .into_iter()
+                .collect(),
             },
         );
 
@@ -224,20 +230,8 @@ pub mod tests {
     fn cancel_redemptions() {
         let mut deps = default_deps(None);
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![Redemption {
-                subscription: Addr::unchecked("sub_1"),
-                capital: 10_000,
-                asset: 5_000,
-                available_epoch_seconds: None,
-            }])
-            .unwrap();
-
-        execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &vec![]),
-            HandleMsg::CancelRedemptions {
-                redemptions: vec![Redemption {
+            .save(
+                &vec![Redemption {
                     subscription: Addr::unchecked("sub_1"),
                     capital: 10_000,
                     asset: 5_000,
@@ -245,6 +239,15 @@ pub mod tests {
                 }]
                 .into_iter()
                 .collect(),
+            )
+            .unwrap();
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::CancelRedemptions {
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         )
         .unwrap();
@@ -266,7 +269,7 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &coins(10_000, "stable_coin")),
             HandleMsg::CancelRedemptions {
-                redemptions: vec![],
+                subscriptions: HashSet::new(),
             },
         );
 
@@ -280,7 +283,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelRedemptions {
-                redemptions: vec![],
+                subscriptions: HashSet::new(),
             },
         );
 
@@ -291,7 +294,7 @@ pub mod tests {
     fn cancel_redemptions_not_found() {
         let mut deps = default_deps(None);
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![])
+            .save(&HashSet::new())
             .unwrap();
 
         let res = execute(
@@ -299,12 +302,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelRedemptions {
-                redemptions: vec![Redemption {
-                    subscription: Addr::unchecked("sub_1"),
-                    capital: 10_000,
-                    asset: 5_000,
-                    available_epoch_seconds: None,
-                }],
+                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
             },
         );
 
@@ -316,20 +314,24 @@ pub mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![
-                Redemption {
-                    subscription: Addr::unchecked("sub_1"),
-                    capital: 10_000,
-                    asset: 5_000,
-                    available_epoch_seconds: None,
-                },
-                Redemption {
-                    subscription: Addr::unchecked("sub_2"),
-                    capital: 10_000,
-                    asset: 5_000,
-                    available_epoch_seconds: None,
-                },
-            ])
+            .save(
+                &vec![
+                    Redemption {
+                        subscription: Addr::unchecked("sub_1"),
+                        capital: 10_000,
+                        asset: 5_000,
+                        available_epoch_seconds: None,
+                    },
+                    Redemption {
+                        subscription: Addr::unchecked("sub_2"),
+                        capital: 10_000,
+                        asset: 5_000,
+                        available_epoch_seconds: None,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         let res = execute(
@@ -337,8 +339,6 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &coins(5_000, "investment_coin")),
             HandleMsg::ClaimRedemption {
-                asset: 5_000,
-                capital: 10_000,
                 to: Addr::unchecked("destination"),
                 memo: Some(String::from("note")),
             },
@@ -383,12 +383,16 @@ pub mod tests {
     fn claim_redemption_without_asset() {
         let mut deps = default_deps(None);
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![Redemption {
-                subscription: Addr::unchecked("sub_1"),
-                capital: 10_000,
-                asset: 5_000,
-                available_epoch_seconds: None,
-            }])
+            .save(
+                &vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    capital: 10_000,
+                    asset: 5_000,
+                    available_epoch_seconds: None,
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
 
         let res = execute(
@@ -396,8 +400,6 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &vec![]),
             HandleMsg::ClaimRedemption {
-                asset: 5_000,
-                capital: 10_000,
                 to: Addr::unchecked("destination"),
                 memo: Some(String::from("note")),
             },
@@ -411,12 +413,16 @@ pub mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_redemptions(&mut deps.storage)
-            .save(&vec![Redemption {
-                subscription: Addr::unchecked("sub_1"),
-                capital: 10_000,
-                asset: 5_000,
-                available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
-            }])
+            .save(
+                &vec![Redemption {
+                    subscription: Addr::unchecked("sub_1"),
+                    capital: 10_000,
+                    asset: 5_000,
+                    available_epoch_seconds: Some(1675209600), // Feb 01 2023 UTC
+                }]
+                .into_iter()
+                .collect(),
+            )
             .unwrap();
         let mut env = mock_env();
         env.block.time = Timestamp::from_seconds(1672531200); // Jan 01 2023 UTC
@@ -426,8 +432,6 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &coins(5_000, "investment_coin")),
             HandleMsg::ClaimRedemption {
-                asset: 5_000,
-                capital: 10_000,
                 to: Addr::unchecked("destination"),
                 memo: Some(String::from("note")),
             },
