@@ -5,9 +5,7 @@ use crate::error::contract_error;
 use crate::msg::CapitalCall;
 use crate::state::config_read;
 use crate::state::outstanding_capital_calls;
-use cosmwasm_std::coins;
 use cosmwasm_std::Addr;
-use cosmwasm_std::BankMsg;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
 use cosmwasm_std::MessageInfo;
@@ -19,7 +17,6 @@ use provwasm_std::ProvenanceQuery;
 
 pub fn try_issue_calls(
     deps: DepsMut<ProvenanceQuery>,
-    env: Env,
     info: MessageInfo,
     calls: HashSet<CapitalCall>,
 ) -> ContractResponse {
@@ -43,17 +40,7 @@ pub fn try_issue_calls(
 
     outstanding_capital_calls(deps.storage).save(&calls)?;
 
-    let investment_total = calls.iter().map(|it| it.amount).sum();
-    let supply = state.capital_to_shares(investment_total);
-    let mint = mint_marker_supply(supply.into(), state.investment_denom.clone())?;
-    let withdraw = withdraw_coins(
-        state.investment_denom.clone(),
-        supply.into(),
-        state.investment_denom,
-        env.contract.address,
-    )?;
-
-    Ok(Response::new().add_messages(vec![mint, withdraw]))
+    Ok(Response::default())
 }
 
 pub fn try_cancel_calls(
@@ -96,7 +83,7 @@ pub fn try_claim_investment(
     let mut calls = outstanding_capital_calls(deps.storage).load()?;
     let call = calls
         .take(&CapitalCall {
-            subscription: info.sender,
+            subscription: info.sender.clone(),
             amount: 0,
             due_epoch_seconds: None,
         })
@@ -130,23 +117,25 @@ pub fn try_claim_investment(
         None => return contract_error("capital required for investment"),
     };
 
-    let send_investment = BankMsg::Send {
-        to_address: call.subscription.into_string(),
-        amount: coins(
-            state.capital_to_shares(call.amount).into(),
-            state.investment_denom.clone(),
-        ),
-    };
+    let shares = state.capital_to_shares(call.amount);
 
-    let deposit_commitment =
-        state.deposit_commitment_msg(deps.as_ref(), state.capital_to_shares(call.amount).into())?;
+    let mint_investment = mint_marker_supply(shares.into(), state.investment_denom.clone())?;
+    let withdraw_investment = withdraw_coins(
+        state.investment_denom.clone(),
+        shares.into(),
+        state.investment_denom.clone(),
+        info.sender,
+    )?;
+
+    let deposit_commitment = state.deposit_commitment_msg(deps.as_ref(), shares.into())?;
     let burn_commitment = burn_marker_supply(
         state.capital_to_shares(call.amount).into(),
         state.commitment_denom,
     )?;
 
     Ok(Response::new()
-        .add_message(send_investment)
+        .add_message(mint_investment)
+        .add_message(withdraw_investment)
         .add_message(deposit_commitment)
         .add_message(burn_commitment))
 }
@@ -169,7 +158,6 @@ mod tests {
     use cosmwasm_std::coin;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
-    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
 
@@ -192,7 +180,7 @@ mod tests {
             .unwrap();
 
         // issue calls
-        let res = execute(
+        execute(
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
@@ -207,20 +195,6 @@ mod tests {
             },
         )
         .unwrap();
-
-        assert_eq!(2, res.messages.len());
-
-        // verify minted coin
-        let mint = mint_args(msg_at_index(&res, 0));
-        assert_eq!(200, mint.amount.u128());
-        assert_eq!("investment_coin", mint.denom);
-
-        // verify withdrawn coin
-        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
-        assert_eq!("investment_coin", marker_denom);
-        assert_eq!(200, coin.amount.u128());
-        assert_eq!("investment_coin", coin.denom);
-        assert_eq!(MOCK_CONTRACT_ADDR, recipient.clone().into_string());
 
         // verify capital call is saved
         assert_eq!(
@@ -396,18 +370,22 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(3, res.messages.len());
+        assert_eq!(4, res.messages.len());
 
-        // verify send investment
-        let (to_address, coins) = send_args(msg_at_index(&res, 0));
-        assert_eq!("sub_1", to_address);
-        assert_eq!(1, coins.len());
-        let coin = coins.first().unwrap();
-        assert_eq!("investment_coin", coin.denom);
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(100, mint.amount.u128());
+        assert_eq!("investment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("investment_coin", marker_denom);
         assert_eq!(100, coin.amount.u128());
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!("sub_1", recipient.clone().into_string());
 
         // verify deposit commitment
-        let (to_address, coins) = send_args(msg_at_index(&res, 1));
+        let (to_address, coins) = send_args(msg_at_index(&res, 2));
         assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
         assert_eq!(1, coins.len());
         let coin = coins.first().unwrap();
@@ -415,7 +393,7 @@ mod tests {
         assert_eq!(100, coin.amount.u128());
 
         // verify burn commitment
-        let coin = burn_args(msg_at_index(&res, 2));
+        let coin = burn_args(msg_at_index(&res, 3));
         assert_eq!(1, coins.len());
         assert_eq!("commitment_coin", coin.denom);
         assert_eq!(100, coin.amount.u128());

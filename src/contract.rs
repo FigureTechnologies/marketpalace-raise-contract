@@ -81,7 +81,7 @@ pub fn execute(
             try_update_commitments(deps, info, commitment_updates)
         }
         HandleMsg::AcceptCommitmentUpdate {} => try_accept_commitment_update(deps, info),
-        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, env, info, calls),
+        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
         HandleMsg::CancelCapitalCalls { subscriptions } => {
             try_cancel_calls(deps, info, subscriptions)
         }
