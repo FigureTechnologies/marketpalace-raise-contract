@@ -9,10 +9,12 @@ use crate::recover::try_recover;
 use crate::redemption::try_cancel_redemptions;
 use crate::redemption::try_claim_redemption;
 use crate::redemption::try_issue_redemptions;
+use crate::subscribe::try_accept_commitment_update;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_close_remaining_commitment;
 use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
+use crate::subscribe::try_update_commitments;
 use cosmwasm_std::{
     coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
     Response, SubMsgResult,
@@ -75,6 +77,10 @@ pub fn execute(
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, env, info, subscriptions)
         }
+        HandleMsg::UpdateCommitments { commitment_updates } => {
+            try_update_commitments(deps, info, commitment_updates)
+        }
+        HandleMsg::AcceptCommitmentUpdate {} => try_accept_commitment_update(deps, info),
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, env, info, calls),
         HandleMsg::CancelCapitalCalls { subscriptions } => {
             try_cancel_calls(deps, info, subscriptions)

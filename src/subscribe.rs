@@ -1,7 +1,9 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::msg::AcceptSubscription;
-use crate::state::{closed_subscriptions, config, outstanding_subscription_closures};
+use crate::msg::{AcceptSubscription, CommitmentUpdate};
+use crate::state::{
+    closed_subscriptions, config, outstanding_commitment_updates, outstanding_subscription_closures,
+};
 use crate::state::{config_read, Status};
 use crate::sub_msg::SubTerms;
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
@@ -209,6 +211,93 @@ pub fn try_accept_subscriptions(
                 state.commitment_denom.clone(),
             ),
         })))
+}
+
+pub fn try_update_commitments(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    updates: HashSet<CommitmentUpdate>,
+) -> ContractResponse {
+    let state = config(deps.storage).load()?;
+
+    if info.sender != state.gp {
+        return contract_error("only gp can update commitments");
+    }
+
+    let mut commitment_updates = outstanding_commitment_updates(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+
+    for update in updates {
+        if !state.accepted_subs.contains(&update.subscription) {
+            return contract_error("no subscription accepted to update commitment");
+        }
+
+        if update.change_by_amount == 0 {
+            return contract_error("commitment update must be non zero");
+        }
+
+        let remaining = state.remaining_commitment(deps.as_ref(), &update.subscription)?;
+        if update.change_by_amount < 0 && remaining < update.change_by_amount.unsigned_abs().into()
+        {
+            return contract_error("can not have a negative remaining commitment");
+        }
+
+        commitment_updates.insert(update);
+    }
+
+    outstanding_commitment_updates(deps.storage).save(&commitment_updates)?;
+
+    Ok(Response::default())
+}
+
+pub fn try_accept_commitment_update(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+) -> ContractResponse {
+    let state = config(deps.storage).load()?;
+
+    let mut commitment_updates = outstanding_commitment_updates(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+
+    let update = commitment_updates
+        .take(&CommitmentUpdate {
+            subscription: info.sender.clone(),
+            change_by_amount: 0,
+        })
+        .ok_or("no update found")?;
+    outstanding_commitment_updates(deps.storage).save(&commitment_updates)?;
+
+    let abs_amount = update.change_by_amount.unsigned_abs();
+    if update.change_by_amount > 0 {
+        Ok(Response::new().add_messages(vec![
+            mint_marker_supply(abs_amount.into(), state.commitment_denom.clone())?,
+            withdraw_coins(
+                state.commitment_denom.clone(),
+                abs_amount.into(),
+                state.commitment_denom,
+                info.sender,
+            )?,
+        ]))
+    } else {
+        let sent = info.funds.first().ok_or("commitment required")?;
+
+        if sent.denom != state.commitment_denom {
+            return contract_error("funds must be commitment denom");
+        }
+
+        if sent.amount.u128() != abs_amount.into() {
+            return contract_error("funds must match update amount");
+        }
+
+        Ok(Response::new()
+            .add_message(state.deposit_commitment_msg(deps.as_ref(), abs_amount.into())?)
+            .add_message(burn_marker_supply(
+                abs_amount.into(),
+                state.commitment_denom,
+            )?))
+    }
 }
 
 fn get_attributes(deps: Deps<ProvenanceQuery>, terms: &SubTerms) -> StdResult<HashSet<String>> {
@@ -700,5 +789,329 @@ mod tests {
             },
         );
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn update_commitments_increase() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 1_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify outsounding commitment update exists
+        assert_eq!(
+            1,
+            outstanding_commitment_updates(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn update_commitments_decrease() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -1_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify outsounding commitment update exists
+        assert_eq!(
+            1,
+            outstanding_commitment_updates(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn update_commitments_decrease_too_much() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -2_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn update_commitments_decrease_zero() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 0,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn update_commitments_bad_actor() {
+        let mut deps = default_deps(Some(|state| {
+            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
+        }));
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 1_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        );
+
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn accept_commitment_update_increase() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+
+        // accept commitment update
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![]),
+            HandleMsg::AcceptCommitmentUpdate {},
+        )
+        .unwrap();
+
+        assert_eq!(2, res.messages.len());
+
+        // verify minted coin
+        let mint = mint_args(msg_at_index(&res, 0));
+        assert_eq!(1_000, mint.amount.u128());
+        assert_eq!("commitment_coin", mint.denom);
+
+        // verify withdrawn coin
+        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", marker_denom);
+        assert_eq!(1_000, coin.amount.u128());
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!("sub_1", recipient.clone().into_string());
+
+        // verify outsounding commitment update removed
+        assert_eq!(
+            0,
+            outstanding_commitment_updates(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+    }
+
+    #[test]
+    fn accept_commitment_update_decrease() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+
+        // accept commitment update
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(1_000, "commitment_coin")),
+            HandleMsg::AcceptCommitmentUpdate {},
+        )
+        .unwrap();
+
+        assert_eq!(2, res.messages.len());
+
+        // verify deposit commitment
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
+        assert_eq!("commitment_coin", coins.first().unwrap().denom);
+        assert_eq!(1_000, coins.first().unwrap().amount.u128());
+
+        // verify burn commitment
+        let coin = burn_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(1_000, coin.amount.u128());
+
+        // verify outsounding commitment update removed
+        assert_eq!(
+            0,
+            outstanding_commitment_updates(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+    }
+
+    #[test]
+    fn accept_commitment_update_decrease_no_funds() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+
+        // accept commitment update
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &vec![]),
+            HandleMsg::AcceptCommitmentUpdate {},
+        );
+
+        assert!(res.is_err())
+    }
+
+    #[test]
+    fn accept_commitment_update_decrease_bad_denom() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+
+        // accept commitment update
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(1_000, "bad_denom")),
+            HandleMsg::AcceptCommitmentUpdate {},
+        );
+
+        assert!(res.is_err())
+    }
+
+    #[test]
+    fn accept_commitment_update_decrease_bad_amount() {
+        let mut deps = default_deps(None);
+        load_markers(&mut deps.querier);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: -1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+
+        // accept commitment update
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(100, "commitment_denom")),
+            HandleMsg::AcceptCommitmentUpdate {},
+        );
+
+        assert!(res.is_err())
     }
 }

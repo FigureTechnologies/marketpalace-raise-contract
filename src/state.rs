@@ -7,12 +7,13 @@ use std::hash::Hash;
 use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 
-use crate::msg::{CapitalCall, Distribution, Redemption};
+use crate::msg::{CapitalCall, CommitmentUpdate, Distribution, Redemption};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
 pub static SUBSCRIPTION_CLOSURES_KEY: &[u8] = b"subscription_closures";
 pub static CLOSED_SUBSCRIPTIONS_KEY: &[u8] = b"closed_subscriptions";
+pub static COMMITMENT_UPDATES_KEY: &[u8] = b"commitment_updates";
 pub static CAPITAL_CALLS_KEY: &[u8] = b"capital_calls";
 pub static REDEMPTIONS_KEY: &[u8] = b"redemptions";
 pub static DISTRIBUTIONS_KEY: &[u8] = b"distributions";
@@ -110,6 +111,12 @@ pub fn outstanding_subscription_closures(storage: &mut dyn Storage) -> Singleton
 
 pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
+}
+
+pub fn outstanding_commitment_updates(
+    storage: &mut dyn Storage,
+) -> Singleton<HashSet<CommitmentUpdate>> {
+    singleton(storage, COMMITMENT_UPDATES_KEY)
 }
 
 pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<HashSet<CapitalCall>> {

@@ -94,10 +94,7 @@ pub fn try_claim_redemption(
         }
     }
 
-    let sent = match info.funds.first() {
-        Some(sent) => sent,
-        None => return contract_error("asset required for redemption"),
-    };
+    let sent = info.funds.first().ok_or("asset required for redemption")?;
 
     if sent.denom != state.investment_denom {
         return contract_error("payment should be made in investment denom");

@@ -40,6 +40,10 @@ pub enum HandleMsg {
     AcceptSubscriptions {
         subscriptions: HashSet<AcceptSubscription>,
     },
+    UpdateCommitments {
+        commitment_updates: HashSet<CommitmentUpdate>,
+    },
+    AcceptCommitmentUpdate {},
     IssueCapitalCalls {
         calls: HashSet<CapitalCall>,
     },
@@ -87,6 +91,27 @@ impl PartialEq for AcceptSubscription {
 }
 
 impl Hash for AcceptSubscription {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.subscription.hash(state);
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
+pub struct CommitmentUpdate {
+    pub subscription: Addr,
+    pub change_by_amount: i64,
+}
+
+impl PartialEq for CommitmentUpdate {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscription == other.subscription
+    }
+}
+
+impl Hash for CommitmentUpdate {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,

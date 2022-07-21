@@ -113,6 +113,42 @@
     {
       "type": "object",
       "required": [
+        "update_commitments"
+      ],
+      "properties": {
+        "update_commitments": {
+          "type": "object",
+          "required": [
+            "commitment_updates"
+          ],
+          "properties": {
+            "commitment_updates": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CommitmentUpdate"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "accept_commitment_update"
+      ],
+      "properties": {
+        "accept_commitment_update": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "issue_capital_calls"
       ],
       "properties": {
@@ -392,6 +428,22 @@
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "subscription": {
+          "$ref": "#/definitions/Addr"
+        }
+      }
+    },
+    "CommitmentUpdate": {
+      "type": "object",
+      "required": [
+        "change_by_amount",
+        "subscription"
+      ],
+      "properties": {
+        "change_by_amount": {
+          "type": "integer",
+          "format": "int64"
         },
         "subscription": {
           "$ref": "#/definitions/Addr"
