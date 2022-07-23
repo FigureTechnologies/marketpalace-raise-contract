@@ -1,10 +1,10 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::{AcceptSubscription, CommitmentUpdate};
+use crate::state::config_read;
 use crate::state::{
     closed_subscriptions, config, outstanding_commitment_updates, outstanding_subscription_closures,
 };
-use crate::state::{config_read, Status};
 use crate::sub_msg::SubTerms;
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
 use cosmwasm_std::Deps;
@@ -31,22 +31,6 @@ pub fn try_propose_subscription(
     max_commitment: u64,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
-
-    if state.status != Status::Active {
-        return contract_error("contract is not active");
-    }
-
-    if let Some(min) = state.min_commitment {
-        if max_commitment < min {
-            return contract_error("subscription max commitment is below raise minumum commitment");
-        }
-    }
-
-    if let Some(max) = state.max_commitment {
-        if min_commitment > max {
-            return contract_error("subscription min commitment exceeds raise maximum commitment");
-        }
-    }
 
     let create_sub = SubMsg::reply_always(
         WasmMsg::Instantiate {
@@ -381,41 +365,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(1, res.messages.len());
-    }
-
-    #[test]
-    fn propose_subscription_with_max_too_small() {
-        let mut deps = default_deps(None);
-
-        // propose a sub as lp
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("lp", &[]),
-            HandleMsg::ProposeSubscription {
-                min_commitment: 10_000,
-                max_commitment: 5_000,
-            },
-        );
-        assert!(res.is_err());
-    }
-
-    #[test]
-
-    fn propose_subscription_with_min_too_big() {
-        let mut deps = default_deps(None);
-
-        // propose a sub as lp
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("lp", &[]),
-            HandleMsg::ProposeSubscription {
-                min_commitment: 110_000,
-                max_commitment: 100_000,
-            },
-        );
-        assert!(res.is_err());
     }
 
     #[test]

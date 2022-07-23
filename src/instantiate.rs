@@ -1,8 +1,7 @@
 use crate::contract::ContractResponse;
-use crate::error::contract_error;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
-use crate::state::{State, Status};
+use crate::state::State;
 use crate::version::CONTRACT_NAME;
 use crate::version::CONTRACT_VERSION;
 use cosmwasm_std::{entry_point, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdResult};
@@ -27,7 +26,6 @@ pub fn instantiate(
 
     let state = State {
         subscription_code_id: msg.subscription_code_id,
-        status: Status::Active,
         recovery_admin: msg.recovery_admin,
         gp: info.sender,
         acceptable_accreditations: msg.acceptable_accreditations,
@@ -36,23 +34,9 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         capital_per_share: msg.capital_per_share,
-        min_commitment: msg.min_commitment,
-        max_commitment: msg.max_commitment,
         pending_review_subs: HashSet::new(),
         accepted_subs: HashSet::new(),
     };
-
-    if let Some(min_commitment) = msg.min_commitment {
-        if state.not_evenly_divisble(min_commitment) {
-            return contract_error("min commitment must be evenly divisible by capital per share");
-        }
-    }
-
-    if let Some(max_commitment) = msg.max_commitment {
-        if state.not_evenly_divisble(max_commitment) {
-            return contract_error("max commitment must be evenly divisible by capital per share");
-        }
-    }
 
     config(deps.storage).save(&state)?;
 
@@ -110,8 +94,6 @@ mod tests {
                 other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
             },
         )
         .unwrap();
@@ -151,11 +133,6 @@ mod tests {
             MarkerMsgParams::ActivateMarker { .. }
         ));
 
-        // verify raise is in active status
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetStatus {}).unwrap();
-        let status: Status = from_binary(&res).unwrap();
-        assert_eq!(Status::Active, status);
-
         // verify that terms of raise are correct
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetTerms {}).unwrap();
         let terms: Terms = from_binary(&res).unwrap();
@@ -170,55 +147,5 @@ mod tests {
             terms.investment_denom
         );
         assert_eq!("stable_coin", terms.capital_denom);
-        assert_eq!(10_000, terms.min_commitment.unwrap());
-        assert_eq!(100_000, terms.max_commitment.unwrap());
-    }
-
-    #[test]
-    fn init_with_bad_min() {
-        let mut deps = mock_dependencies(&[]);
-        let info = mock_info("gp", &[]);
-
-        // instantiate and verify we have 3 messages (create, grant, & activate)
-        let res = instantiate(
-            deps.as_mut(),
-            mock_env(),
-            info,
-            InstantiateMsg {
-                subscription_code_id: 0,
-                recovery_admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                capital_denom: String::from("stable_coin"),
-                capital_per_share: 100,
-                min_commitment: Some(10_001),
-                max_commitment: Some(100_000),
-            },
-        );
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn init_with_bad_max() {
-        let mut deps = mock_dependencies(&[]);
-        let info = mock_info("gp", &[]);
-
-        // instantiate and verify we have 3 messages (create, grant, & activate)
-        let res = instantiate(
-            deps.as_mut(),
-            mock_env(),
-            info,
-            InstantiateMsg {
-                subscription_code_id: 0,
-                recovery_admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
-                capital_denom: String::from("stable_coin"),
-                capital_per_share: 100,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_001),
-            },
-        );
-        assert!(res.is_err());
     }
 }

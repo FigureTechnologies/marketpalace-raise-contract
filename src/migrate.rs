@@ -44,7 +44,6 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
 mod tests {
     use super::*;
     use crate::contract::tests::default_deps;
-    use crate::state::Status;
     use crate::state::Withdrawal;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::Addr;
@@ -55,7 +54,6 @@ mod tests {
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
     pub struct OldState {
         pub subscription_code_id: u64,
-        pub status: Status,
         pub recovery_admin: Addr,
         pub gp: Addr,
         pub target: u64,

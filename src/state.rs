@@ -21,7 +21,6 @@ pub static DISTRIBUTIONS_KEY: &[u8] = b"distributions";
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub subscription_code_id: u64,
-    pub status: Status,
     pub recovery_admin: Addr,
     pub gp: Addr,
     pub acceptable_accreditations: HashSet<String>,
@@ -30,8 +29,6 @@ pub struct State {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
-    pub min_commitment: Option<u64>,
-    pub max_commitment: Option<u64>,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
 }
@@ -68,11 +65,6 @@ impl State {
             amount: coins(amount, self.commitment_denom.clone()),
         })
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub enum Status {
-    Active,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, JsonSchema)]
@@ -138,7 +130,6 @@ mod tests {
     impl State {
         pub fn test_default() -> State {
             State {
-                status: Status::Active,
                 subscription_code_id: 0,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
@@ -148,8 +139,6 @@ mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
-                min_commitment: Some(10_000),
-                max_commitment: Some(100_000),
                 pending_review_subs: HashSet::new(),
                 accepted_subs: HashSet::new(),
             }
