@@ -7,7 +7,7 @@ use crate::{
     contract::ContractResponse,
     error::contract_error,
     msg::Redemption,
-    state::{config_read, outstanding_redemptions},
+    state::{accepted_subscriptions, config_read, outstanding_redemptions},
 };
 
 pub fn try_issue_redemptions(
@@ -16,6 +16,9 @@ pub fn try_issue_redemptions(
     redemptions: HashSet<Redemption>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
+    let accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
 
     if info.sender != state.gp {
         return contract_error("only gp can issue redemptions");
@@ -23,7 +26,7 @@ pub fn try_issue_redemptions(
 
     if redemptions
         .iter()
-        .any(|redemption| !state.accepted_subs.contains(&redemption.subscription))
+        .any(|redemption| !accepted.contains(&redemption.subscription))
     {
         return contract_error("subscription not accepted");
     }
@@ -139,15 +142,16 @@ pub mod tests {
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
     use crate::msg::HandleMsg;
+    use crate::state::tests::set_accepted;
+    use crate::state::tests::to_addresses;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
 
     #[test]
     fn issue_redemptions() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs.insert(Addr::unchecked("sub_2"));
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_2"]);
         outstanding_redemptions(&mut deps.storage)
             .save(
                 &vec![Redemption {
@@ -244,7 +248,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &vec![]),
             HandleMsg::CancelRedemptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -299,7 +303,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelRedemptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         );
 

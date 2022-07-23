@@ -5,6 +5,8 @@ use std::hash::Hash;
 
 use cosmwasm_std::Addr;
 
+use crate::state::State;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub subscription_code_id: u64,
@@ -188,22 +190,13 @@ impl Hash for Distribution {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetTerms {},
-    GetSubs {},
+    GetState {},
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct Terms {
-    pub acceptable_accreditations: HashSet<String>,
-    pub other_required_tags: HashSet<String>,
-    pub commitment_denom: String,
-    pub investment_denom: String,
-    pub capital_denom: String,
-    pub capital_per_share: u64,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Subs {
-    pub pending_review: HashSet<Addr>,
-    pub accepted: HashSet<Addr>,
+pub struct RaiseState {
+    pub general: State,
+    pub pending_subscriptions: Option<HashSet<Addr>>,
+    pub accepted_subscriptions: Option<HashSet<Addr>>,
+    pub closed_subscriptions: Option<HashSet<Addr>>,
 }

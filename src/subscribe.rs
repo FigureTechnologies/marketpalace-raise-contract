@@ -1,7 +1,7 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::{AcceptSubscription, CommitmentUpdate};
-use crate::state::config_read;
+use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
 use crate::state::{
     closed_subscriptions, config, outstanding_commitment_updates, outstanding_subscription_closures,
 };
@@ -58,7 +58,13 @@ pub fn try_close_subscriptions(
     info: MessageInfo,
     subscriptions: HashSet<Addr>,
 ) -> ContractResponse {
-    let mut state = config(deps.storage).load()?;
+    let state = config(deps.storage).load()?;
+    let mut pending = pending_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let mut accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
     let mut subscription_closures = outstanding_subscription_closures(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -68,10 +74,10 @@ pub fn try_close_subscriptions(
     }
 
     for subscription in subscriptions {
-        if !state.pending_review_subs.remove(&subscription) {
-            if state.accepted_subs.contains(&subscription) {
+        if !pending.remove(&subscription) {
+            if accepted.contains(&subscription) {
                 if state.remaining_commitment(deps.as_ref(), &subscription)? == 0 {
-                    state.accepted_subs.remove(&subscription);
+                    accepted.remove(&subscription);
                 } else {
                     subscription_closures.insert(subscription);
                 }
@@ -81,7 +87,8 @@ pub fn try_close_subscriptions(
         }
     }
 
-    config(deps.storage).save(&state)?;
+    pending_subscriptions(deps.storage).save(&pending)?;
+    accepted_subscriptions(deps.storage).save(&accepted)?;
     outstanding_subscription_closures(deps.storage).save(&subscription_closures)?;
 
     Ok(Response::new())
@@ -127,7 +134,13 @@ pub fn try_accept_subscriptions(
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
 ) -> ContractResponse {
-    let mut state = config(deps.storage).load()?;
+    let state = config(deps.storage).load()?;
+    let mut pending = pending_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let mut accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
 
     if info.sender != state.gp {
         return contract_error("only gp can accept subscriptions");
@@ -170,10 +183,11 @@ pub fn try_accept_subscriptions(
     }
 
     accepts.iter().for_each(|accept| {
-        state.pending_review_subs.remove(&accept.subscription);
-        state.accepted_subs.insert(accept.subscription.clone());
+        pending.remove(&accept.subscription);
+        accepted.insert(accept.subscription.clone());
     });
-    config(deps.storage).save(&state)?;
+    pending_subscriptions(deps.storage).save(&pending)?;
+    accepted_subscriptions(deps.storage).save(&accepted)?;
 
     let commitment_total: u64 = accepts.iter().map(|accept| accept.commitment).sum();
     let supply = state.capital_to_shares(commitment_total);
@@ -203,6 +217,9 @@ pub fn try_update_commitments(
     updates: HashSet<CommitmentUpdate>,
 ) -> ContractResponse {
     let state = config(deps.storage).load()?;
+    let accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
 
     if info.sender != state.gp {
         return contract_error("only gp can update commitments");
@@ -213,7 +230,7 @@ pub fn try_update_commitments(
         .unwrap_or_default();
 
     for update in updates {
-        if !state.accepted_subs.contains(&update.subscription) {
+        if !accepted.contains(&update.subscription) {
             return contract_error("no subscription accepted to update commitment");
         }
 
@@ -316,8 +333,13 @@ mod tests {
     use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
-    use crate::msg::Subs;
+    use crate::msg::RaiseState;
     use crate::query::query;
+    use crate::state::accepted_subscriptions_read;
+    use crate::state::pending_subscriptions_read;
+    use crate::state::tests::set_accepted;
+    use crate::state::tests::set_pending;
+    use crate::state::tests::to_addresses;
     use crate::state::State;
     use crate::sub_msg::SubTerms;
     use cosmwasm_std::from_binary;
@@ -369,9 +391,8 @@ mod tests {
 
     #[test]
     fn close_subscriptions_pending() {
-        let mut deps = default_deps(Some(|state| {
-            state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // close sub as gp
         execute(
@@ -379,7 +400,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseSubscriptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -387,19 +408,17 @@ mod tests {
         // verify pending sub is removed
         assert_eq!(
             0,
-            config(&mut deps.storage)
+            pending_subscriptions_read(&deps.storage)
                 .load()
                 .unwrap()
-                .pending_review_subs
                 .len()
         )
     }
 
     #[test]
     fn close_subscriptions_accepted_no_commitment() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
 
         // close sub as gp
         execute(
@@ -407,7 +426,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseSubscriptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -415,19 +434,20 @@ mod tests {
         // verify accepted sub is removed
         assert_eq!(
             0,
-            config(&mut deps.storage)
+            accepted_subscriptions_read(&deps.storage)
                 .load()
                 .unwrap()
-                .accepted_subs
                 .len()
         )
     }
 
     #[test]
     fn close_subscriptions_accepted_commitment() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        config(&mut deps.storage)
+            .save(&&State::test_default())
+            .unwrap();
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(100, "commitment_coin"));
@@ -438,7 +458,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseSubscriptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -446,10 +466,9 @@ mod tests {
         // verify accepted sub remains
         assert_eq!(
             1,
-            config(&mut deps.storage)
+            accepted_subscriptions_read(&deps.storage)
                 .load()
                 .unwrap()
-                .accepted_subs
                 .len()
         );
         // verify outsounding sub closure exists
@@ -464,9 +483,8 @@ mod tests {
 
     #[test]
     fn close_subscriptions_bad_actor() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
 
         // close sub as gp
         let res = execute(
@@ -474,7 +492,7 @@ mod tests {
             mock_env(),
             mock_info("bad_actor", &[]),
             HandleMsg::CloseSubscriptions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         );
 
@@ -483,9 +501,8 @@ mod tests {
 
     #[test]
     fn close_subscriptions_not_found() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
 
         // close sub as gp
         let res = execute(
@@ -493,7 +510,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseSubscriptions {
-                subscriptions: vec![Addr::unchecked("sub_2")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_2"]),
             },
         );
 
@@ -505,7 +522,7 @@ mod tests {
         let mut deps = default_deps(None);
         load_markers(&mut deps.querier);
         outstanding_subscription_closures(&mut deps.storage)
-            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .save(&to_addresses(vec!["sub_1"]))
             .unwrap();
 
         // close remaining commitment
@@ -552,7 +569,7 @@ mod tests {
     fn close_remaining_commitment_not_found() {
         let mut deps = default_deps(None);
         outstanding_subscription_closures(&mut deps.storage)
-            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .save(&to_addresses(vec!["sub_1"]))
             .unwrap();
 
         // close remaining commitment
@@ -570,7 +587,7 @@ mod tests {
     fn close_remaining_commitment_leftover() {
         let mut deps = default_deps(None);
         outstanding_subscription_closures(&mut deps.storage)
-            .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
+            .save(&to_addresses(vec!["sub_1"]))
             .unwrap();
         deps.querier
             .base
@@ -590,10 +607,10 @@ mod tests {
     #[test]
     fn accept_subscription() {
         let mut deps = mock_sub_terms();
-
-        let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        config(&mut deps.storage).save(&state).unwrap();
+        config(&mut deps.storage)
+            .save(&State::test_default())
+            .unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
         let res = execute(
@@ -632,19 +649,16 @@ mod tests {
         assert_eq!("commitment_coin", funds.first().unwrap().denom);
 
         // assert that the sub has moved from pending review to accepted
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetSubs {}).unwrap();
-        let subs: Subs = from_binary(&res).unwrap();
-        assert_eq!(0, subs.pending_review.len());
-        assert_eq!(1, subs.accepted.len());
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
+        let state: RaiseState = from_binary(&res).unwrap();
+        assert_eq!(0, state.pending_subscriptions.unwrap().len());
+        assert_eq!(1, state.accepted_subscriptions.unwrap().len());
     }
 
     #[test]
     fn accept_subscription_bad_actor() {
         let mut deps = mock_sub_terms();
-
-        let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        config(&mut deps.storage).save(&state).unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
         let res = execute(
@@ -668,9 +682,10 @@ mod tests {
         let mut deps = mock_sub_terms();
 
         let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
         state.acceptable_accreditations = vec![String::from("506c")].into_iter().collect();
         config(&mut deps.storage).save(&state).unwrap();
+
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
         let res = execute(
@@ -694,9 +709,10 @@ mod tests {
         let mut deps = mock_sub_terms();
 
         let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
         state.other_required_tags = vec![String::from("misc")].into_iter().collect();
         config(&mut deps.storage).save(&state).unwrap();
+
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
         let res = execute(
@@ -718,10 +734,7 @@ mod tests {
     #[test]
     fn accept_subscription_with_bad_amount() {
         let mut deps = mock_sub_terms();
-
-        let mut state = State::test_default();
-        state.pending_review_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        config(&mut deps.storage).save(&state).unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
         let res = execute(
@@ -742,9 +755,8 @@ mod tests {
 
     #[test]
     fn update_commitments_increase() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
@@ -777,9 +789,8 @@ mod tests {
 
     #[test]
     fn update_commitments_decrease() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
@@ -812,9 +823,8 @@ mod tests {
 
     #[test]
     fn update_commitments_decrease_too_much() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_pending(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
@@ -839,9 +849,8 @@ mod tests {
 
     #[test]
     fn update_commitments_decrease_zero() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
@@ -866,9 +875,8 @@ mod tests {
 
     #[test]
     fn update_commitments_bad_actor() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));

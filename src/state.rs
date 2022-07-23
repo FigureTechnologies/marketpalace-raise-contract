@@ -11,6 +11,8 @@ use crate::msg::{CapitalCall, CommitmentUpdate, Distribution, Redemption};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
+pub static PENDING_SUBSCRIPTIONS_KEY: &[u8] = b"pending_subscriptions";
+pub static ACCEPTED_SUBSCRIPTIONS_KEY: &[u8] = b"accepted_subscriptions";
 pub static SUBSCRIPTION_CLOSURES_KEY: &[u8] = b"subscription_closures";
 pub static CLOSED_SUBSCRIPTIONS_KEY: &[u8] = b"closed_subscriptions";
 pub static COMMITMENT_UPDATES_KEY: &[u8] = b"commitment_updates";
@@ -29,8 +31,6 @@ pub struct State {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
-    pub pending_review_subs: HashSet<Addr>,
-    pub accepted_subs: HashSet<Addr>,
 }
 
 impl State {
@@ -97,12 +97,32 @@ pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
 }
 
+pub fn pending_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
+    singleton(storage, PENDING_SUBSCRIPTIONS_KEY)
+}
+
+pub fn pending_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
+    singleton_read(storage, PENDING_SUBSCRIPTIONS_KEY)
+}
+
+pub fn accepted_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
+    singleton(storage, ACCEPTED_SUBSCRIPTIONS_KEY)
+}
+
+pub fn accepted_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
+    singleton_read(storage, ACCEPTED_SUBSCRIPTIONS_KEY)
+}
+
 pub fn outstanding_subscription_closures(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, SUBSCRIPTION_CLOSURES_KEY)
 }
 
 pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
+}
+
+pub fn closed_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
+    singleton_read(storage, CLOSED_SUBSCRIPTIONS_KEY)
 }
 
 pub fn outstanding_commitment_updates(
@@ -124,7 +144,7 @@ pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<HashSet
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     impl State {
@@ -139,10 +159,27 @@ mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
-                pending_review_subs: HashSet::new(),
-                accepted_subs: HashSet::new(),
             }
         }
+    }
+
+    pub fn to_addresses(addresses: Vec<&str>) -> HashSet<Addr> {
+        addresses
+            .into_iter()
+            .map(|addr| Addr::unchecked(addr))
+            .collect()
+    }
+
+    pub fn set_pending(storage: &mut dyn Storage, addresses: Vec<&str>) {
+        pending_subscriptions(storage)
+            .save(&to_addresses(addresses))
+            .unwrap();
+    }
+
+    pub fn set_accepted(storage: &mut dyn Storage, addresses: Vec<&str>) {
+        accepted_subscriptions(storage)
+            .save(&to_addresses(addresses))
+            .unwrap();
     }
 
     #[test]

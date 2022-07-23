@@ -7,7 +7,7 @@ use crate::{
     contract::ContractResponse,
     error::contract_error,
     msg::Distribution,
-    state::{config_read, outstanding_distributions},
+    state::{accepted_subscriptions, config_read, outstanding_distributions},
 };
 
 pub fn try_issue_distributions(
@@ -16,6 +16,9 @@ pub fn try_issue_distributions(
     distributions: HashSet<Distribution>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
+    let accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
 
     if info.sender != state.gp {
         return contract_error("only gp can issue distributions");
@@ -23,7 +26,7 @@ pub fn try_issue_distributions(
 
     if distributions
         .iter()
-        .any(|distribution| !state.accepted_subs.contains(&distribution.subscription))
+        .any(|distribution| !accepted.contains(&distribution.subscription))
     {
         return contract_error("subscription not accepted");
     }
@@ -117,15 +120,16 @@ pub mod tests {
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
     use crate::msg::HandleMsg;
+    use crate::state::tests::set_accepted;
+    use crate::state::tests::to_addresses;
     use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
 
     #[test]
     fn issue_distributions() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs.insert(Addr::unchecked("sub_2"));
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_2"]);
         outstanding_distributions(&mut deps.storage)
             .save(
                 &vec![Distribution {
@@ -218,7 +222,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &vec![]),
             HandleMsg::CancelDistributions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -273,7 +277,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &coins(10_000, "stable_coin")),
             HandleMsg::CancelDistributions {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         );
 

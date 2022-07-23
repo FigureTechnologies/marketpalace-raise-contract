@@ -5,22 +5,10 @@
     {
       "type": "object",
       "required": [
-        "get_terms"
+        "get_state"
       ],
       "properties": {
-        "get_terms": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_subs"
-      ],
-      "properties": {
-        "get_subs": {
+        "get_state": {
           "type": "object"
         }
       },

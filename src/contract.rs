@@ -9,6 +9,7 @@ use crate::recover::try_recover;
 use crate::redemption::try_cancel_redemptions;
 use crate::redemption::try_claim_redemption;
 use crate::redemption::try_issue_redemptions;
+use crate::state::pending_subscriptions;
 use crate::subscribe::try_accept_commitment_update;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_close_remaining_commitment;
@@ -33,10 +34,12 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     // look for a contract address from instantiating subscription contract
     if let SubMsgResult::Ok(response) = msg.result {
         if let Some(contract_address) = contract_address(&response.events) {
-            config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-                state.pending_review_subs.insert(contract_address);
-                Ok(state)
-            })?;
+            pending_subscriptions(deps.storage).update(
+                |mut pending| -> Result<_, ContractError> {
+                    pending.insert(contract_address);
+                    Ok(pending)
+                },
+            )?;
         } else {
             return contract_error("no contract address found");
         }

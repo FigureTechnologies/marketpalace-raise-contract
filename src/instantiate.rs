@@ -11,7 +11,6 @@ use provwasm_std::{
     activate_marker, create_marker, finalize_marker, grant_marker_access, MarkerAccess, MarkerType,
     ProvenanceMsg,
 };
-use std::collections::HashSet;
 
 // Note, you can use StdResult in some functions where you do not
 // make use of the custom errors
@@ -34,8 +33,6 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         capital_per_share: msg.capital_per_share,
-        pending_review_subs: HashSet::new(),
-        accepted_subs: HashSet::new(),
     };
 
     config(deps.storage).save(&state)?;
@@ -65,11 +62,13 @@ pub fn instantiate(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
     use crate::msg::QueryMsg;
-    use crate::msg::Terms;
+    use crate::msg::RaiseState;
     use crate::query::query;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::testing::{mock_env, mock_info};
@@ -134,18 +133,18 @@ mod tests {
         ));
 
         // verify that terms of raise are correct
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetTerms {}).unwrap();
-        let terms: Terms = from_binary(&res).unwrap();
-        assert_eq!(0, terms.acceptable_accreditations.len());
-        assert_eq!(0, terms.other_required_tags.len());
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
+        let state: RaiseState = from_binary(&res).unwrap();
+        assert_eq!(0, state.general.acceptable_accreditations.len());
+        assert_eq!(0, state.general.other_required_tags.len());
         assert_eq!(
             format!("{}.commitment", MOCK_CONTRACT_ADDR),
-            terms.commitment_denom
+            state.general.commitment_denom
         );
         assert_eq!(
             format!("{}.investment", MOCK_CONTRACT_ADDR),
-            terms.investment_denom
+            state.general.investment_denom
         );
-        assert_eq!("stable_coin", terms.capital_denom);
+        assert_eq!("stable_coin", state.general.capital_denom);
     }
 }

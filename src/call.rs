@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::CapitalCall;
+use crate::state::accepted_subscriptions;
 use crate::state::config_read;
 use crate::state::outstanding_capital_calls;
 use cosmwasm_std::Addr;
@@ -21,6 +22,9 @@ pub fn try_issue_calls(
     calls: HashSet<CapitalCall>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
+    let accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
 
     if info.sender != state.gp {
         return contract_error("only gp can issue calls");
@@ -28,7 +32,7 @@ pub fn try_issue_calls(
 
     if calls
         .iter()
-        .any(|call| !state.accepted_subs.contains(&call.subscription))
+        .any(|call| !accepted.contains(&call.subscription))
     {
         return contract_error("subscription not accepted");
     }
@@ -155,6 +159,8 @@ mod tests {
     use crate::msg::CapitalCall;
     use crate::msg::HandleMsg;
     use crate::state::outstanding_capital_calls;
+    use crate::state::tests::set_accepted;
+    use crate::state::tests::to_addresses;
     use cosmwasm_std::coin;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
@@ -164,9 +170,8 @@ mod tests {
     #[test]
 
     fn issue_calls() {
-        let mut deps = default_deps(Some(|state| {
-            state.accepted_subs.insert(Addr::unchecked("sub_2"));
-        }));
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_2"]);
         outstanding_capital_calls(&mut deps.storage)
             .save(
                 &vec![CapitalCall {
@@ -270,7 +275,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CancelCapitalCalls {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         )
         .unwrap();
@@ -335,7 +340,7 @@ mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CancelCapitalCalls {
-                subscriptions: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                subscriptions: to_addresses(vec!["sub_1"]),
             },
         );
 
