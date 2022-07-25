@@ -29,31 +29,43 @@
       ],
       "properties": {
         "propose_subscription": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "close_subscriptions"
+      ],
+      "properties": {
+        "close_subscriptions": {
           "type": "object",
           "required": [
-            "max_commitment",
-            "min_commitment"
+            "subscriptions"
           ],
           "properties": {
-            "max_commitment": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "min_commitment": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "min_days_of_notice": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
             }
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "close_remaining_commitment"
+      ],
+      "properties": {
+        "close_remaining_commitment": {
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -85,6 +97,42 @@
     {
       "type": "object",
       "required": [
+        "update_commitments"
+      ],
+      "properties": {
+        "update_commitments": {
+          "type": "object",
+          "required": [
+            "commitment_updates"
+          ],
+          "properties": {
+            "commitment_updates": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CommitmentUpdate"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "accept_commitment_update"
+      ],
+      "properties": {
+        "accept_commitment_update": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "issue_capital_calls"
       ],
       "properties": {
@@ -97,7 +145,7 @@
             "calls": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/CallIssuance"
+                "$ref": "#/definitions/CapitalCall"
               },
               "uniqueItems": true
             }
@@ -109,27 +157,35 @@
     {
       "type": "object",
       "required": [
-        "close_capital_calls"
+        "cancel_capital_calls"
       ],
       "properties": {
-        "close_capital_calls": {
+        "cancel_capital_calls": {
           "type": "object",
           "required": [
-            "calls",
-            "is_retroactive"
+            "subscriptions"
           ],
           "properties": {
-            "calls": {
+            "subscriptions": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/CallClosure"
+                "$ref": "#/definitions/Addr"
               },
               "uniqueItems": true
-            },
-            "is_retroactive": {
-              "type": "boolean"
             }
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "claim_investment"
+      ],
+      "properties": {
+        "claim_investment": {
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -143,13 +199,9 @@
         "issue_redemptions": {
           "type": "object",
           "required": [
-            "is_retroactive",
             "redemptions"
           ],
           "properties": {
-            "is_retroactive": {
-              "type": "boolean"
-            },
             "redemptions": {
               "type": "array",
               "items": {
@@ -165,14 +217,63 @@
     {
       "type": "object",
       "required": [
+        "cancel_redemptions"
+      ],
+      "properties": {
+        "cancel_redemptions": {
+          "type": "object",
+          "required": [
+            "subscriptions"
+          ],
+          "properties": {
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "claim_redemption"
+      ],
+      "properties": {
+        "claim_redemption": {
+          "type": "object",
+          "required": [
+            "to"
+          ],
+          "properties": {
+            "memo": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "to": {
+              "$ref": "#/definitions/Addr"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "issue_distributions"
       ],
       "properties": {
         "issue_distributions": {
           "type": "object",
           "required": [
-            "distributions",
-            "is_retroactive"
+            "distributions"
           ],
           "properties": {
             "distributions": {
@@ -181,9 +282,56 @@
                 "$ref": "#/definitions/Distribution"
               },
               "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "cancel_distributions"
+      ],
+      "properties": {
+        "cancel_distributions": {
+          "type": "object",
+          "required": [
+            "subscriptions"
+          ],
+          "properties": {
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "claim_distribution"
+      ],
+      "properties": {
+        "claim_distribution": {
+          "type": "object",
+          "required": [
+            "to"
+          ],
+          "properties": {
+            "memo": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
-            "is_retroactive": {
-              "type": "boolean"
+            "to": {
+              "$ref": "#/definitions/Addr"
             }
           }
         }
@@ -228,7 +376,6 @@
       "type": "object",
       "required": [
         "commitment",
-        "is_retroactive",
         "subscription"
       ],
       "properties": {
@@ -236,9 +383,6 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
-        },
-        "is_retroactive": {
-          "type": "boolean"
         },
         "subscription": {
           "$ref": "#/definitions/Addr"
@@ -249,18 +393,7 @@
       "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
       "type": "string"
     },
-    "CallClosure": {
-      "type": "object",
-      "required": [
-        "subscription"
-      ],
-      "properties": {
-        "subscription": {
-          "$ref": "#/definitions/Addr"
-        }
-      }
-    },
-    "CallIssuance": {
+    "CapitalCall": {
       "type": "object",
       "required": [
         "amount",
@@ -272,13 +405,29 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "days_of_notice": {
+        "due_epoch_seconds": {
           "type": [
             "integer",
             "null"
           ],
-          "format": "uint16",
+          "format": "uint64",
           "minimum": 0.0
+        },
+        "subscription": {
+          "$ref": "#/definitions/Addr"
+        }
+      }
+    },
+    "CommitmentUpdate": {
+      "type": "object",
+      "required": [
+        "change_by_amount",
+        "subscription"
+      ],
+      "properties": {
+        "change_by_amount": {
+          "type": "integer",
+          "format": "int64"
         },
         "subscription": {
           "$ref": "#/definitions/Addr"
@@ -297,6 +446,14 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "available_epoch_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "subscription": {
           "$ref": "#/definitions/Addr"
         }
@@ -312,6 +469,14 @@
       "properties": {
         "asset": {
           "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "available_epoch_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
           "minimum": 0.0
         },

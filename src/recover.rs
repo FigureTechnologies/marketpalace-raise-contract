@@ -1,24 +1,25 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::error::ContractError;
 use crate::state::config;
-use crate::state::config_read;
 use cosmwasm_std::Addr;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
+use provwasm_std::ProvenanceQuery;
 
-pub fn try_recover(deps: DepsMut, info: MessageInfo, gp: Addr) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
+pub fn try_recover(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    gp: Addr,
+) -> ContractResponse {
+    let mut state = config(deps.storage).load()?;
 
     if info.sender != state.recovery_admin {
         return contract_error("only admin can recover raise");
     }
 
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.gp = gp;
-        Ok(state)
-    })?;
+    state.gp = gp;
+    config(deps.storage).save(&state)?;
 
     Ok(Response::default())
 }
@@ -29,6 +30,7 @@ mod tests {
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
     use crate::msg::HandleMsg;
+    use crate::state::config_read;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
 

@@ -5,46 +5,10 @@
     {
       "type": "object",
       "required": [
-        "get_status"
+        "get_state"
       ],
       "properties": {
-        "get_status": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_terms"
-      ],
-      "properties": {
-        "get_terms": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_subs"
-      ],
-      "properties": {
-        "get_subs": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "get_transactions"
-      ],
-      "properties": {
-        "get_transactions": {
+        "get_state": {
           "type": "object"
         }
       },

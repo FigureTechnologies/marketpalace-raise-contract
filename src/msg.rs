@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use crate::state::Withdrawal;
 use cosmwasm_std::Addr;
+
+use crate::state::State;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -14,8 +15,6 @@ pub struct InstantiateMsg {
     pub other_required_tags: HashSet<String>,
     pub capital_denom: String,
     pub capital_per_share: u64,
-    pub min_commitment: Option<u64>,
-    pub max_commitment: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -30,28 +29,44 @@ pub enum HandleMsg {
     Recover {
         gp: Addr,
     },
-    ProposeSubscription {
-        min_commitment: u64,
-        max_commitment: u64,
-        min_days_of_notice: Option<u16>,
+    ProposeSubscription {},
+    CloseSubscriptions {
+        subscriptions: HashSet<Addr>,
     },
+    CloseRemainingCommitment {},
     AcceptSubscriptions {
         subscriptions: HashSet<AcceptSubscription>,
     },
+    UpdateCommitments {
+        commitment_updates: HashSet<CommitmentUpdate>,
+    },
+    AcceptCommitmentUpdate {},
     IssueCapitalCalls {
-        calls: HashSet<CallIssuance>,
+        calls: HashSet<CapitalCall>,
     },
-    CloseCapitalCalls {
-        calls: HashSet<CallClosure>,
-        is_retroactive: bool,
+    CancelCapitalCalls {
+        subscriptions: HashSet<Addr>,
     },
+    ClaimInvestment {},
     IssueRedemptions {
         redemptions: HashSet<Redemption>,
-        is_retroactive: bool,
+    },
+    CancelRedemptions {
+        subscriptions: HashSet<Addr>,
+    },
+    ClaimRedemption {
+        to: Addr,
+        memo: Option<String>,
     },
     IssueDistributions {
         distributions: HashSet<Distribution>,
-        is_retroactive: bool,
+    },
+    CancelDistributions {
+        subscriptions: HashSet<Addr>,
+    },
+    ClaimDistribution {
+        to: Addr,
+        memo: Option<String>,
     },
     IssueWithdrawal {
         to: Addr,
@@ -64,7 +79,6 @@ pub enum HandleMsg {
 pub struct AcceptSubscription {
     pub subscription: Addr,
     pub commitment: u64,
-    pub is_retroactive: bool,
 }
 
 impl PartialEq for AcceptSubscription {
@@ -83,19 +97,18 @@ impl Hash for AcceptSubscription {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
-pub struct CallIssuance {
+pub struct CommitmentUpdate {
     pub subscription: Addr,
-    pub amount: u64,
-    pub days_of_notice: Option<u16>,
+    pub change_by_amount: i64,
 }
 
-impl PartialEq for CallIssuance {
+impl PartialEq for CommitmentUpdate {
     fn eq(&self, other: &Self) -> bool {
         self.subscription == other.subscription
     }
 }
 
-impl Hash for CallIssuance {
+impl Hash for CommitmentUpdate {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,
@@ -104,18 +117,20 @@ impl Hash for CallIssuance {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
-pub struct CallClosure {
+#[derive(Deserialize, Serialize, Clone, Eq, Debug, JsonSchema)]
+pub struct CapitalCall {
     pub subscription: Addr,
+    pub amount: u64,
+    pub due_epoch_seconds: Option<u64>,
 }
 
-impl PartialEq for CallClosure {
+impl PartialEq for CapitalCall {
     fn eq(&self, other: &Self) -> bool {
         self.subscription == other.subscription
     }
 }
 
-impl Hash for CallClosure {
+impl Hash for CapitalCall {
     fn hash<H>(&self, state: &mut H)
     where
         H: std::hash::Hasher,
@@ -129,6 +144,7 @@ pub struct Redemption {
     pub subscription: Addr,
     pub asset: u64,
     pub capital: u64,
+    pub available_epoch_seconds: Option<u64>,
 }
 
 impl PartialEq for Redemption {
@@ -150,6 +166,7 @@ impl Hash for Redemption {
 pub struct Distribution {
     pub subscription: Addr,
     pub amount: u64,
+    pub available_epoch_seconds: Option<u64>,
 }
 
 impl PartialEq for Distribution {
@@ -170,31 +187,18 @@ impl Hash for Distribution {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetStatus {},
-    GetTerms {},
-    GetSubs {},
-    GetTransactions {},
+    GetState {},
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct Terms {
-    pub acceptable_accreditations: HashSet<String>,
-    pub other_required_tags: HashSet<String>,
-    pub commitment_denom: String,
-    pub investment_denom: String,
-    pub capital_denom: String,
-    pub capital_per_share: u64,
-    pub min_commitment: Option<u64>,
-    pub max_commitment: Option<u64>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Subs {
-    pub pending_review: HashSet<Addr>,
-    pub accepted: HashSet<Addr>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Transactions {
-    pub withdrawals: HashSet<Withdrawal>,
+pub struct RaiseState {
+    pub general: State,
+    pub pending_subscriptions: HashSet<Addr>,
+    pub accepted_subscriptions: HashSet<Addr>,
+    pub outstanding_subscription_closures: HashSet<Addr>,
+    pub closed_subscriptions: HashSet<Addr>,
+    pub outstanding_commitment_updates: HashSet<CommitmentUpdate>,
+    pub outstanding_capital_calls: HashSet<CapitalCall>,
+    pub outstanding_redemptions: HashSet<Redemption>,
+    pub outstanding_distributions: HashSet<Distribution>,
 }

@@ -26,22 +26,6 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "max_commitment": {
-      "type": [
-        "integer",
-        "null"
-      ],
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "min_commitment": {
-      "type": [
-        "integer",
-        "null"
-      ],
-      "format": "uint64",
-      "minimum": 0.0
-    },
     "other_required_tags": {
       "type": "array",
       "items": {
