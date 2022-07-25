@@ -8,8 +8,6 @@ pub struct SubInstantiateMsg {
     pub recovery_admin: Addr,
     pub lp: Addr,
     pub capital_denom: String,
-    pub min_commitment: u64,
-    pub max_commitment: u64,
     pub capital_per_share: u64,
 }
 
@@ -25,6 +23,4 @@ pub struct SubTerms {
     pub lp: Addr,
     pub raise: Addr,
     pub capital_denom: String,
-    pub min_commitment: u64,
-    pub max_commitment: u64,
 }

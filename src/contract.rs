@@ -69,16 +69,13 @@ pub fn execute(
 ) -> ContractResponse {
     match msg {
         HandleMsg::Recover { gp } => try_recover(deps, info, gp),
-        HandleMsg::ProposeSubscription {
-            min_commitment,
-            max_commitment,
-        } => try_propose_subscription(deps, env, info, min_commitment, max_commitment),
+        HandleMsg::ProposeSubscription {} => try_propose_subscription(deps, env, info),
         HandleMsg::CloseSubscriptions { subscriptions } => {
             try_close_subscriptions(deps, info, subscriptions)
         }
         HandleMsg::CloseRemainingCommitment {} => try_close_remaining_commitment(deps, info),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
-            try_accept_subscriptions(deps, env, info, subscriptions)
+            try_accept_subscriptions(deps, info, subscriptions)
         }
         HandleMsg::UpdateCommitments { commitment_updates } => {
             try_update_commitments(deps, info, commitment_updates)

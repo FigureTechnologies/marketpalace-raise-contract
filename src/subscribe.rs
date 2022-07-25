@@ -15,7 +15,6 @@ use cosmwasm_std::Response;
 use cosmwasm_std::StdResult;
 use cosmwasm_std::SubMsg;
 use cosmwasm_std::WasmMsg;
-use cosmwasm_std::{coins, BankMsg};
 use cosmwasm_std::{to_binary, Addr};
 use provwasm_std::withdraw_coins;
 use provwasm_std::ProvenanceQuerier;
@@ -27,8 +26,6 @@ pub fn try_propose_subscription(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    min_commitment: u64,
-    max_commitment: u64,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -40,8 +37,6 @@ pub fn try_propose_subscription(
                 recovery_admin: state.recovery_admin,
                 lp: info.sender,
                 capital_denom: state.capital_denom,
-                min_commitment,
-                max_commitment,
                 capital_per_share: state.capital_per_share,
             })?,
             funds: vec![],
@@ -130,7 +125,6 @@ pub fn try_close_remaining_commitment(
 
 pub fn try_accept_subscriptions(
     deps: DepsMut<ProvenanceQuery>,
-    env: Env,
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
 ) -> ContractResponse {
@@ -139,6 +133,9 @@ pub fn try_accept_subscriptions(
         .may_load()?
         .unwrap_or_default();
     let mut accepted = accepted_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let mut commitment_updates = outstanding_commitment_updates(deps.storage)
         .may_load()?
         .unwrap_or_default();
 
@@ -169,14 +166,6 @@ pub fn try_accept_subscriptions(
             ));
         }
 
-        if accept.commitment < terms.min_commitment {
-            return contract_error("commitment less than minimum commitment");
-        }
-
-        if accept.commitment > terms.max_commitment {
-            return contract_error("commitment more than maximum commitment");
-        }
-
         if state.not_evenly_divisble(accept.commitment) {
             return contract_error("accept amount must be evenly divisble by capital per share");
         }
@@ -185,30 +174,16 @@ pub fn try_accept_subscriptions(
     accepts.iter().for_each(|accept| {
         pending.remove(&accept.subscription);
         accepted.insert(accept.subscription.clone());
+        commitment_updates.insert(CommitmentUpdate {
+            subscription: accept.subscription.clone(),
+            change_by_amount: accept.commitment as i64,
+        });
     });
     pending_subscriptions(deps.storage).save(&pending)?;
     accepted_subscriptions(deps.storage).save(&accepted)?;
+    outstanding_commitment_updates(deps.storage).save(&commitment_updates)?;
 
-    let commitment_total: u64 = accepts.iter().map(|accept| accept.commitment).sum();
-    let supply = state.capital_to_shares(commitment_total);
-    let mint = mint_marker_supply(supply.into(), state.commitment_denom.clone())?;
-    let withdraw = withdraw_coins(
-        state.commitment_denom.clone(),
-        supply.into(),
-        state.commitment_denom.clone(),
-        env.contract.address,
-    )?;
-
-    Ok(Response::new()
-        .add_message(mint)
-        .add_message(withdraw)
-        .add_messages(accepts.into_iter().map(|accept| BankMsg::Send {
-            to_address: accept.subscription.into_string(),
-            amount: coins(
-                state.capital_to_shares(accept.commitment) as u128,
-                state.commitment_denom.clone(),
-            ),
-        })))
+    Ok(Response::default())
 }
 
 pub fn try_update_commitments(
@@ -342,11 +317,11 @@ mod tests {
     use crate::state::tests::to_addresses;
     use crate::state::State;
     use crate::sub_msg::SubTerms;
+    use cosmwasm_std::coins;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::testing::MockApi;
-    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
     use cosmwasm_std::ContractResult;
@@ -362,8 +337,6 @@ mod tests {
                     lp: Addr::unchecked("lp"),
                     raise: Addr::unchecked("raise_1"),
                     capital_denom: String::from("stable_coin"),
-                    min_commitment: 10_000,
-                    max_commitment: 100_000,
                 })
                 .unwrap(),
             ))
@@ -380,10 +353,7 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("lp", &[]),
-            HandleMsg::ProposeSubscription {
-                min_commitment: 10_000,
-                max_commitment: 100_000,
-            },
+            HandleMsg::ProposeSubscription {},
         )
         .unwrap();
         assert_eq!(1, res.messages.len());
@@ -613,7 +583,7 @@ mod tests {
         set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
-        let res = execute(
+        execute(
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
@@ -628,31 +598,20 @@ mod tests {
         )
         .unwrap();
 
-        // verify that mint, withdraw, and exec message was sent
-        assert_eq!(3, res.messages.len());
-
-        // verify minted coin
-        let mint = mint_args(msg_at_index(&res, 0));
-        assert_eq!(200, mint.amount.u128());
-        assert_eq!("commitment_coin", mint.denom);
-
-        // verify withdrawn coin
-        let (marker_denom, coin, recipient) = withdraw_args(msg_at_index(&res, 1));
-        assert_eq!("commitment_coin", marker_denom);
-        assert_eq!(200, coin.amount.u128());
-        assert_eq!("commitment_coin", coin.denom);
-        assert_eq!(MOCK_CONTRACT_ADDR, recipient.clone().into_string());
-
-        let (to_address, funds) = send_args(msg_at_index(&res, 2));
-        assert_eq!("sub_1", to_address);
-        assert_eq!(200, funds.first().unwrap().amount.u128());
-        assert_eq!("commitment_coin", funds.first().unwrap().denom);
-
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
         let state: RaiseState = from_binary(&res).unwrap();
         assert_eq!(0, state.pending_subscriptions.unwrap().len());
         assert_eq!(1, state.accepted_subscriptions.unwrap().len());
+
+        // verify outsounding commitment update exists
+        assert_eq!(
+            1,
+            outstanding_commitment_updates(&mut deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        )
     }
 
     #[test]

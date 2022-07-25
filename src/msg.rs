@@ -29,10 +29,7 @@ pub enum HandleMsg {
     Recover {
         gp: Addr,
     },
-    ProposeSubscription {
-        min_commitment: u64,
-        max_commitment: u64,
-    },
+    ProposeSubscription {},
     CloseSubscriptions {
         subscriptions: HashSet<Addr>,
     },
