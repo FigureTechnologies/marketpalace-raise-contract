@@ -193,7 +193,12 @@ pub enum QueryMsg {
 #[derive(Deserialize, Serialize)]
 pub struct RaiseState {
     pub general: State,
-    pub pending_subscriptions: Option<HashSet<Addr>>,
-    pub accepted_subscriptions: Option<HashSet<Addr>>,
-    pub closed_subscriptions: Option<HashSet<Addr>>,
+    pub pending_subscriptions: HashSet<Addr>,
+    pub accepted_subscriptions: HashSet<Addr>,
+    pub outstanding_subscription_closures: HashSet<Addr>,
+    pub closed_subscriptions: HashSet<Addr>,
+    pub outstanding_commitment_updates: HashSet<CommitmentUpdate>,
+    pub outstanding_capital_calls: HashSet<CapitalCall>,
+    pub outstanding_redemptions: HashSet<Redemption>,
+    pub outstanding_distributions: HashSet<Distribution>,
 }

@@ -601,8 +601,8 @@ mod tests {
         // assert that the sub has moved from pending review to accepted
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
         let state: RaiseState = from_binary(&res).unwrap();
-        assert_eq!(0, state.pending_subscriptions.unwrap().len());
-        assert_eq!(1, state.accepted_subscriptions.unwrap().len());
+        assert_eq!(0, state.pending_subscriptions.len());
+        assert_eq!(1, state.accepted_subscriptions.len());
 
         // verify outsounding commitment update exists
         assert_eq!(

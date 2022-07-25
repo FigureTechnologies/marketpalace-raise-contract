@@ -117,6 +117,12 @@ pub fn outstanding_subscription_closures(storage: &mut dyn Storage) -> Singleton
     singleton(storage, SUBSCRIPTION_CLOSURES_KEY)
 }
 
+pub fn outstanding_subscription_closures_read(
+    storage: &dyn Storage,
+) -> ReadonlySingleton<HashSet<Addr>> {
+    singleton_read(storage, SUBSCRIPTION_CLOSURES_KEY)
+}
+
 pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
 }
@@ -131,16 +137,40 @@ pub fn outstanding_commitment_updates(
     singleton(storage, COMMITMENT_UPDATES_KEY)
 }
 
+pub fn outstanding_commitment_updates_read(
+    storage: &dyn Storage,
+) -> ReadonlySingleton<HashSet<CommitmentUpdate>> {
+    singleton_read(storage, COMMITMENT_UPDATES_KEY)
+}
+
 pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<HashSet<CapitalCall>> {
     singleton(storage, CAPITAL_CALLS_KEY)
+}
+
+pub fn outstanding_capital_calls_read(
+    storage: &dyn Storage,
+) -> ReadonlySingleton<HashSet<CapitalCall>> {
+    singleton_read(storage, CAPITAL_CALLS_KEY)
 }
 
 pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<HashSet<Redemption>> {
     singleton(storage, REDEMPTIONS_KEY)
 }
 
+pub fn outstanding_redemptions_read(
+    storage: &dyn Storage,
+) -> ReadonlySingleton<HashSet<Redemption>> {
+    singleton_read(storage, REDEMPTIONS_KEY)
+}
+
 pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<HashSet<Distribution>> {
     singleton(storage, DISTRIBUTIONS_KEY)
+}
+
+pub fn outstanding_distributions_read(
+    storage: &dyn Storage,
+) -> ReadonlySingleton<HashSet<Distribution>> {
+    singleton_read(storage, DISTRIBUTIONS_KEY)
 }
 
 #[cfg(test)]
