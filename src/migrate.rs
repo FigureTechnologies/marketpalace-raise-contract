@@ -1,110 +1,172 @@
-// use crate::contract::ContractResponse;
-// use crate::msg::MigrateMsg;
-// use crate::state::config;
-// use crate::version::CONTRACT_NAME;
-// use crate::version::CONTRACT_VERSION;
-// use cosmwasm_std::entry_point;
-// use cosmwasm_std::to_binary;
-// use cosmwasm_std::DepsMut;
-// use cosmwasm_std::Env;
-// use cosmwasm_std::Response;
-// use cw2::set_contract_version;
-// use provwasm_std::ProvenanceQuery;
+use std::collections::HashSet;
+use std::hash::Hash;
+
+use crate::contract::ContractResponse;
+use crate::msg::MigrateMsg;
+use crate::state::accepted_subscriptions;
+use crate::state::config;
+use crate::state::pending_subscriptions;
+use crate::state::State;
+use crate::state::CONFIG_KEY;
+use crate::version::CONTRACT_NAME;
+use crate::version::CONTRACT_VERSION;
+use cosmwasm_std::entry_point;
+use cosmwasm_std::Addr;
+use cosmwasm_std::DepsMut;
+use cosmwasm_std::Env;
+use cosmwasm_std::Response;
+use cosmwasm_storage::singleton;
+use cw2::set_contract_version;
+use provwasm_std::ProvenanceQuery;
+use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct EmptyArgs {}
 
-// #[entry_point]
-// pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> ContractResponse {
-//     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+#[entry_point]
+pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> ContractResponse {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-//     let mut state = config(deps.storage).load()?;
+    let old_state: StateV1_0_1 = singleton(deps.storage, CONFIG_KEY).load()?;
 
-//     if state.subscription_code_id != msg.subscription_code_id {
-//         state.subscription_code_id = msg.subscription_code_id;
-//         config(deps.storage).save(&state)?;
+    let new_state = State {
+        subscription_code_id: msg.subscription_code_id,
+        recovery_admin: old_state.recovery_admin,
+        gp: old_state.gp,
+        acceptable_accreditations: old_state.acceptable_accreditations,
+        other_required_tags: old_state.other_required_tags,
+        commitment_denom: old_state.commitment_denom,
+        investment_denom: old_state.investment_denom,
+        capital_denom: old_state.capital_denom,
+        capital_per_share: old_state.capital_per_share,
+    };
+    let new_pending_subscriptions = old_state.pending_review_subs;
+    let new_accepted_subscriptions = old_state.accepted_subs;
 
-//         let sub_migrations = state
-//             .pending_review_subs
-//             .union(&state.accepted_subs)
-//             .map(|addr| cosmwasm_std::WasmMsg::Migrate {
-//                 contract_addr: addr.to_string(),
-//                 new_code_id: msg.subscription_code_id,
-//                 msg: to_binary(&EmptyArgs {}).unwrap(),
-//             });
+    config(deps.storage).save(&new_state)?;
+    pending_subscriptions(deps.storage).save(&new_pending_subscriptions)?;
+    accepted_subscriptions(deps.storage).save(&new_accepted_subscriptions)?;
 
-//         Ok(Response::default().add_messages(sub_migrations))
-//     } else {
-//         Ok(Response::default())
-//     }
-// }
+    Ok(Response::default())
+}
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::state::Withdrawal;
-//     use crate::{contract::tests::default_deps, state::accepted_subscriptions};
-//     use cosmwasm_std::testing::mock_env;
-//     use cosmwasm_std::Addr;
-//     use schemars::JsonSchema;
-//     use serde::{Deserialize, Serialize};
-//     use std::collections::HashSet;
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct StateV1_0_1 {
+    pub subscription_code_id: u64,
+    pub status: Status,
+    pub recovery_admin: Addr,
+    pub gp: Addr,
+    pub acceptable_accreditations: HashSet<String>,
+    pub other_required_tags: HashSet<String>,
+    pub commitment_denom: String,
+    pub investment_denom: String,
+    pub capital_denom: String,
+    pub capital_per_share: u64,
+    pub min_commitment: Option<u64>,
+    pub max_commitment: Option<u64>,
+    pub sequence: u16,
+    pub pending_review_subs: HashSet<Addr>,
+    pub accepted_subs: HashSet<Addr>,
+    pub issued_withdrawals: HashSet<Withdrawal>,
+}
 
-//     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-//     pub struct OldState {
-//         pub subscription_code_id: u64,
-//         pub recovery_admin: Addr,
-//         pub gp: Addr,
-//         pub target: u64,
-//         pub acceptable_accreditations: HashSet<String>,
-//         pub other_required_tags: HashSet<String>,
-//         pub commitment_denom: String,
-//         pub investment_denom: String,
-//         pub capital_denom: String,
-//         pub capital_per_share: u64,
-//         pub min_commitment: Option<u64>,
-//         pub max_commitment: Option<u64>,
-//         pub sequence: u16,
-//         pub pending_review_subs: HashSet<Addr>,
-//         pub accepted_subs: HashSet<Addr>,
-//         pub issued_withdrawals: HashSet<Withdrawal>,
-//     }
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Status {
+    Active,
+}
 
-//     #[test]
-//     fn new_sub_code_migration() {
-//         let mut deps = default_deps(None);
-//         accepted_subscriptions(&mut deps.storage)
-//             .save(&vec![Addr::unchecked("sub_1")].into_iter().collect())
-//             .unwrap();
+#[derive(Serialize, Deserialize, Clone, Debug, Eq)]
+pub struct Withdrawal {
+    pub sequence: u16,
+    pub to: Addr,
+    pub amount: u64,
+}
 
-//         let res = migrate(
-//             deps.as_mut(),
-//             mock_env(),
-//             MigrateMsg {
-//                 subscription_code_id: 1,
-//             },
-//         )
-//         .unwrap();
+impl PartialEq for Withdrawal {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
 
-//         assert_eq!(1, res.messages.len());
-//     }
+impl Hash for Withdrawal {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.sequence.hash(state);
+    }
+}
 
-//     #[test]
-//     fn same_sub_code_migration() {
-//         let mut deps = default_deps(Some(|state| {
-//             state.accepted_subs = vec![Addr::unchecked("sub_1")].into_iter().collect();
-//         }));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
+    use cosmwasm_std::testing::mock_env;
+    use cosmwasm_std::Addr;
+    use cosmwasm_storage::singleton_read;
+    use provwasm_mocks::mock_dependencies;
 
-//         let res = migrate(
-//             deps.as_mut(),
-//             mock_env(),
-//             MigrateMsg {
-//                 subscription_code_id: 0,
-//             },
-//         )
-//         .unwrap();
+    #[test]
+    fn migration() {
+        let mut deps = mock_dependencies(&[]);
+        singleton(&mut deps.storage, CONFIG_KEY)
+            .save(&StateV1_0_1 {
+                subscription_code_id: 0,
+                status: Status::Active,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                gp: Addr::unchecked("gp"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                commitment_denom: String::from("commitment_coin"),
+                investment_denom: String::from("investment_coin"),
+                capital_denom: String::from("stable_coin"),
+                capital_per_share: 100,
+                min_commitment: None,
+                max_commitment: None,
+                sequence: 0,
+                pending_review_subs: vec![Addr::unchecked("sub_2")].into_iter().collect(),
+                accepted_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
+                issued_withdrawals: vec![].into_iter().collect(),
+            })
+            .unwrap();
 
-//         assert_eq!(0, res.messages.len());
-//     }
-// }
+        migrate(
+            deps.as_mut(),
+            mock_env(),
+            MigrateMsg {
+                subscription_code_id: 1,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            State {
+                subscription_code_id: 1,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                gp: Addr::unchecked("gp"),
+                acceptable_accreditations: HashSet::new(),
+                other_required_tags: HashSet::new(),
+                commitment_denom: String::from("commitment_coin"),
+                investment_denom: String::from("investment_coin"),
+                capital_denom: String::from("stable_coin"),
+                capital_per_share: 100,
+            },
+            singleton_read(&deps.storage, CONFIG_KEY).load().unwrap()
+        );
+        assert_eq!(
+            1,
+            pending_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+        assert_eq!(
+            1,
+            accepted_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+    }
+}
