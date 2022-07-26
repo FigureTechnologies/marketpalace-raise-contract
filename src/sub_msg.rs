@@ -7,6 +7,8 @@ use cosmwasm_std::Addr;
 pub struct SubInstantiateMsg {
     pub recovery_admin: Addr,
     pub lp: Addr,
+    pub commitment_denom: String,
+    pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
 }

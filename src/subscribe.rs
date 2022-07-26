@@ -3,7 +3,7 @@ use crate::error::contract_error;
 use crate::msg::{AcceptSubscription, CommitmentUpdate};
 use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
 use crate::state::{
-    closed_subscriptions, config, outstanding_commitment_updates, outstanding_subscription_closures,
+    closed_subscriptions, outstanding_commitment_updates, outstanding_subscription_closures,
 };
 use crate::sub_msg::SubTerms;
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
@@ -36,6 +36,8 @@ pub fn try_propose_subscription(
             msg: to_binary(&SubInstantiateMsg {
                 recovery_admin: state.recovery_admin,
                 lp: info.sender,
+                commitment_denom: state.commitment_denom,
+                investment_denom: state.investment_denom,
                 capital_denom: state.capital_denom,
                 capital_per_share: state.capital_per_share,
             })?,
@@ -53,7 +55,7 @@ pub fn try_close_subscriptions(
     info: MessageInfo,
     subscriptions: HashSet<Addr>,
 ) -> ContractResponse {
-    let state = config(deps.storage).load()?;
+    let state = config_read(deps.storage).load()?;
     let mut pending = pending_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -128,7 +130,7 @@ pub fn try_accept_subscriptions(
     info: MessageInfo,
     accepts: HashSet<AcceptSubscription>,
 ) -> ContractResponse {
-    let state = config(deps.storage).load()?;
+    let state = config_read(deps.storage).load()?;
     let mut pending = pending_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -191,7 +193,7 @@ pub fn try_update_commitments(
     info: MessageInfo,
     updates: HashSet<CommitmentUpdate>,
 ) -> ContractResponse {
-    let state = config(deps.storage).load()?;
+    let state = config_read(deps.storage).load()?;
     let accepted = accepted_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -231,7 +233,7 @@ pub fn try_accept_commitment_update(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
 ) -> ContractResponse {
-    let state = config(deps.storage).load()?;
+    let state = config_read(deps.storage).load()?;
 
     let mut commitment_updates = outstanding_commitment_updates(deps.storage)
         .may_load()?
@@ -311,6 +313,7 @@ mod tests {
     use crate::msg::RaiseState;
     use crate::query::query;
     use crate::state::accepted_subscriptions_read;
+    use crate::state::config;
     use crate::state::pending_subscriptions_read;
     use crate::state::tests::set_accepted;
     use crate::state::tests::set_pending;

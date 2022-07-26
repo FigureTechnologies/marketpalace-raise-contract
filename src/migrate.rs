@@ -17,7 +17,7 @@ use cosmwasm_std::Addr;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
 use cosmwasm_std::Response;
-use cosmwasm_storage::singleton;
+use cosmwasm_storage::singleton_read;
 use cw2::set_contract_version;
 use provwasm_std::ProvenanceQuery;
 use serde::Deserialize;
@@ -30,7 +30,7 @@ struct EmptyArgs {}
 pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> ContractResponse {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let old_state: StateV1_0_1 = singleton(deps.storage, CONFIG_KEY).load()?;
+    let old_state: StateV1_0_1 = singleton_read(deps.storage, CONFIG_KEY).load()?;
 
     let new_state = State {
         subscription_code_id: msg.subscription_code_id,
@@ -164,7 +164,7 @@ mod tests {
     };
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{to_binary, Addr, ContractResult, SystemResult};
-    use cosmwasm_storage::singleton_read;
+    use cosmwasm_storage::{singleton, singleton_read};
 
     #[test]
     fn migration() {
