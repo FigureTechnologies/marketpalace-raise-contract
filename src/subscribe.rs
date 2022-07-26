@@ -5,8 +5,7 @@ use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
 use crate::state::{
     closed_subscriptions, outstanding_commitment_updates, outstanding_subscription_closures,
 };
-use crate::sub_msg::SubTerms;
-use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg};
+use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg, SubState};
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
@@ -146,11 +145,11 @@ pub fn try_accept_subscriptions(
     }
 
     for accept in accepts.iter() {
-        let terms: SubTerms = deps
+        let sub_state: SubState = deps
             .querier
-            .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetTerms {})?;
+            .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetState {})?;
 
-        let attributes = get_attributes(deps.as_ref(), &terms)?;
+        let attributes = get_attributes(deps.as_ref(), &sub_state)?;
 
         if !state.acceptable_accreditations.is_empty()
             && no_matches(&attributes, &state.acceptable_accreditations)
@@ -278,9 +277,9 @@ pub fn try_accept_commitment_update(
     }
 }
 
-fn get_attributes(deps: Deps<ProvenanceQuery>, terms: &SubTerms) -> StdResult<HashSet<String>> {
+fn get_attributes(deps: Deps<ProvenanceQuery>, sub_state: &SubState) -> StdResult<HashSet<String>> {
     Ok(ProvenanceQuerier::new(&deps.querier)
-        .get_attributes(terms.lp.clone(), None as Option<String>)
+        .get_attributes(sub_state.lp.clone(), None as Option<String>)
         .unwrap()
         .attributes
         .into_iter()
@@ -319,7 +318,6 @@ mod tests {
     use crate::state::tests::set_pending;
     use crate::state::tests::to_addresses;
     use crate::state::State;
-    use crate::sub_msg::SubTerms;
     use cosmwasm_std::coins;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
@@ -332,14 +330,18 @@ mod tests {
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
 
-    pub fn mock_sub_terms(
+    pub fn mock_sub_state(
     ) -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
         wasm_smart_mock_dependencies(&vec![], |_, _| {
             SystemResult::Ok(ContractResult::Ok(
-                to_binary(&SubTerms {
+                to_binary(&SubState {
+                    recovery_admin: Addr::unchecked("marketpalace"),
                     lp: Addr::unchecked("lp"),
                     raise: Addr::unchecked("raise_1"),
+                    commitment_denom: String::from("raise_1.commitment"),
+                    investment_denom: String::from("raise_1.investment"),
                     capital_denom: String::from("stable_coin"),
+                    capital_per_share: 1,
                 })
                 .unwrap(),
             ))
@@ -579,7 +581,7 @@ mod tests {
 
     #[test]
     fn accept_subscription() {
-        let mut deps = mock_sub_terms();
+        let mut deps = mock_sub_state();
         config(&mut deps.storage)
             .save(&State::test_default())
             .unwrap();
@@ -619,7 +621,7 @@ mod tests {
 
     #[test]
     fn accept_subscription_bad_actor() {
-        let mut deps = mock_sub_terms();
+        let mut deps = mock_sub_state();
         set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp
@@ -641,7 +643,7 @@ mod tests {
 
     #[test]
     fn accept_subscription_missing_acceptable_accreditation() {
-        let mut deps = mock_sub_terms();
+        let mut deps = mock_sub_state();
 
         let mut state = State::test_default();
         state.acceptable_accreditations = vec![String::from("506c")].into_iter().collect();
@@ -668,7 +670,7 @@ mod tests {
 
     #[test]
     fn accept_subscription_missing_required_tag() {
-        let mut deps = mock_sub_terms();
+        let mut deps = mock_sub_state();
 
         let mut state = State::test_default();
         state.other_required_tags = vec![String::from("misc")].into_iter().collect();
@@ -695,7 +697,7 @@ mod tests {
 
     #[test]
     fn accept_subscription_with_bad_amount() {
-        let mut deps = mock_sub_terms();
+        let mut deps = mock_sub_state();
         set_pending(&mut deps.storage, vec!["sub_1"]);
 
         // accept pending sub as gp

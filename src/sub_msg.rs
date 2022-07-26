@@ -16,13 +16,16 @@ pub struct SubInstantiateMsg {
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubQueryMsg {
-    GetTerms {},
-    GetTransactions {},
+    GetState {},
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct SubTerms {
+pub struct SubState {
+    pub recovery_admin: Addr,
     pub lp: Addr,
     pub raise: Addr,
+    pub commitment_denom: String,
+    pub investment_denom: String,
     pub capital_denom: String,
+    pub capital_per_share: u64,
 }
