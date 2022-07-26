@@ -2,9 +2,11 @@ use std::collections::HashSet;
 use std::hash::Hash;
 
 use crate::contract::ContractResponse;
+use crate::msg::CapitalCall;
 use crate::msg::MigrateMsg;
 use crate::state::accepted_subscriptions;
 use crate::state::config;
+use crate::state::outstanding_capital_calls;
 use crate::state::pending_subscriptions;
 use crate::state::State;
 use crate::state::CONFIG_KEY;
@@ -44,9 +46,26 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
     let new_pending_subscriptions = old_state.pending_review_subs;
     let new_accepted_subscriptions = old_state.accepted_subs;
 
+    let new_capital_calls = new_accepted_subscriptions
+        .iter()
+        .filter_map(|subscription| {
+            let transactions: Transactions = deps
+                .querier
+                .query_wasm_smart(subscription.clone(), &QueryMsg::GetTransactions {})
+                .unwrap();
+
+            transactions.capital_calls.active.map(|call| CapitalCall {
+                subscription: subscription.clone(),
+                amount: call.amount,
+                due_epoch_seconds: None,
+            })
+        })
+        .collect();
+
     config(deps.storage).save(&new_state)?;
     pending_subscriptions(deps.storage).save(&new_pending_subscriptions)?;
     accepted_subscriptions(deps.storage).save(&new_accepted_subscriptions)?;
+    outstanding_capital_calls(deps.storage).save(&new_capital_calls)?;
 
     Ok(Response::default())
 }
@@ -98,18 +117,71 @@ impl Hash for Withdrawal {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryMsg {
+    GetTransactions {},
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Transactions {
+    pub capital_calls: CapitalCalls,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct CapitalCalls {
+    pub active: Option<SubCapitalCall>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq)]
+pub struct SubCapitalCall {
+    pub sequence: u16,
+    pub amount: u64,
+    pub days_of_notice: Option<u16>,
+}
+
+impl PartialEq for SubCapitalCall {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
+
+impl Hash for SubCapitalCall {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.sequence.hash(state);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
+    use crate::mock::wasm_smart_mock_dependencies;
+    use crate::state::{
+        accepted_subscriptions_read, outstanding_capital_calls_read, pending_subscriptions_read,
+    };
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::Addr;
+    use cosmwasm_std::{to_binary, Addr, ContractResult, SystemResult};
     use cosmwasm_storage::singleton_read;
-    use provwasm_mocks::mock_dependencies;
 
     #[test]
     fn migration() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
+            SystemResult::Ok(ContractResult::Ok(
+                to_binary(&Transactions {
+                    capital_calls: CapitalCalls {
+                        active: Some(SubCapitalCall {
+                            sequence: 0,
+                            amount: 10_000,
+                            days_of_notice: None,
+                        }),
+                    },
+                })
+                .unwrap(),
+            ))
+        });
         singleton(&mut deps.storage, CONFIG_KEY)
             .save(&StateV1_0_1 {
                 subscription_code_id: 0,
@@ -164,6 +236,13 @@ mod tests {
         assert_eq!(
             1,
             accepted_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
+        assert_eq!(
+            1,
+            outstanding_capital_calls_read(&deps.storage)
                 .load()
                 .unwrap()
                 .len()
