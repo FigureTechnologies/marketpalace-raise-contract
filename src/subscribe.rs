@@ -220,7 +220,7 @@ pub fn try_update_commitments(
             return contract_error("can not have a negative remaining commitment");
         }
 
-        commitment_updates.insert(update);
+        commitment_updates.replace(update);
     }
 
     outstanding_commitment_updates(deps.storage).save(&commitment_updates)?;
@@ -297,6 +297,8 @@ fn missing_any(a: &HashSet<String>, b: &HashSet<String>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
+
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
@@ -783,6 +785,51 @@ mod tests {
                 .unwrap()
                 .len()
         )
+    }
+
+    #[test]
+    fn update_commitments_stomp() {
+        let mut deps = default_deps(None);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
+        outstanding_commitment_updates(&mut deps.storage)
+            .save(
+                &vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 1_000,
+                }]
+                .into_iter()
+                .collect(),
+            )
+            .unwrap();
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(1_000, "commitment_coin"));
+
+        // update commitments
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateCommitments {
+                commitment_updates: vec![CommitmentUpdate {
+                    subscription: Addr::unchecked("sub_1"),
+                    change_by_amount: 2_000,
+                }]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .unwrap();
+
+        // verify outsounding commitment update exists
+        let updates = outstanding_commitment_updates(&mut deps.storage)
+            .load()
+            .unwrap();
+        assert_eq!(1, updates.len());
+        assert_eq!(
+            2_000,
+            Vec::from_iter(updates).get(0).unwrap().change_by_amount
+        );
     }
 
     #[test]
