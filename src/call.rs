@@ -92,6 +92,7 @@ pub fn try_claim_investment(
             due_epoch_seconds: None,
         })
         .ok_or("no capital call for subscription")?;
+    outstanding_capital_calls(deps.storage).save(&calls)?;
 
     if let Some(due) = call.due_epoch_seconds {
         if due < env.block.time.seconds() {
@@ -159,6 +160,7 @@ mod tests {
     use crate::msg::CapitalCall;
     use crate::msg::HandleMsg;
     use crate::state::outstanding_capital_calls;
+    use crate::state::outstanding_capital_calls_read;
     use crate::state::tests::set_accepted;
     use crate::state::tests::to_addresses;
     use cosmwasm_std::coin;
@@ -402,6 +404,15 @@ mod tests {
         assert_eq!(1, coins.len());
         assert_eq!("commitment_coin", coin.denom);
         assert_eq!(100, coin.amount.u128());
+
+        // verify issued call removed
+        assert_eq!(
+            0,
+            outstanding_capital_calls_read(&deps.storage)
+                .load()
+                .unwrap()
+                .len()
+        );
     }
 
     #[test]
