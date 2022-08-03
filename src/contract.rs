@@ -5,6 +5,9 @@ use crate::distribution::try_cancel_distributions;
 use crate::distribution::try_claim_distribution;
 use crate::distribution::try_issue_distributions;
 use crate::error::contract_error;
+use crate::exchange_asset::try_cancel_asset_exchanges;
+use crate::exchange_asset::try_complete_asset_exchange;
+use crate::exchange_asset::try_issue_asset_exchanges;
 use crate::recover::try_recover;
 use crate::redemption::try_cancel_redemptions;
 use crate::redemption::try_claim_redemption;
@@ -79,6 +82,15 @@ pub fn execute(
         }
         HandleMsg::UpdateCommitments { commitment_updates } => {
             try_update_commitments(deps, info, commitment_updates)
+        }
+        HandleMsg::IssueAssetExchanges { asset_exchanges } => {
+            try_issue_asset_exchanges(deps, info, asset_exchanges)
+        }
+        HandleMsg::CancelAssetExchanges { cancellations } => {
+            try_cancel_asset_exchanges(deps, info, cancellations)
+        }
+        HandleMsg::CompleteAssetExchange { exchange, to, memo } => {
+            try_complete_asset_exchange(deps, env, info, exchange, to, memo)
         }
         HandleMsg::AcceptCommitmentUpdate {} => try_accept_commitment_update(deps, info),
         HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),

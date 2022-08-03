@@ -5,7 +5,7 @@ use std::hash::Hash;
 
 use cosmwasm_std::Addr;
 
-use crate::state::State;
+use crate::state::{AssetExchange, State};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -34,6 +34,17 @@ pub enum HandleMsg {
         subscriptions: HashSet<Addr>,
     },
     CloseRemainingCommitment {},
+    IssueAssetExchanges {
+        asset_exchanges: Vec<IssueAssetExchange>,
+    },
+    CancelAssetExchanges {
+        cancellations: Vec<IssueAssetExchange>,
+    },
+    CompleteAssetExchange {
+        exchange: AssetExchange,
+        to: Option<Addr>,
+        memo: Option<String>,
+    },
     AcceptSubscriptions {
         subscriptions: HashSet<AcceptSubscription>,
     },
@@ -160,6 +171,23 @@ impl Hash for Redemption {
     {
         self.subscription.hash(state)
     }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct IssueAssetExchange {
+    pub subscription: Addr,
+    pub investment: Option<i64>,
+    pub commitment: Option<i64>,
+    pub capital: Option<i64>,
+    pub date: Option<ExchangeDate>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub enum ExchangeDate {
+    #[serde(rename = "due")]
+    Due(u64),
+    #[serde(rename = "avl")]
+    Available(u64),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, JsonSchema)]
