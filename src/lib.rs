@@ -5,7 +5,6 @@ pub mod instantiate;
 pub mod migrate;
 pub mod msg;
 pub mod query;
-pub mod recover;
 pub mod state;
 pub mod sub_msg;
 pub mod subscribe;

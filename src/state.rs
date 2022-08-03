@@ -4,10 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
-use cosmwasm_storage::{
-    bucket, bucket_read, singleton, singleton_read, Bucket, ReadonlyBucket, ReadonlySingleton,
-    Singleton,
-};
+use cosmwasm_storage::{bucket, singleton, singleton_read, Bucket, ReadonlySingleton, Singleton};
 
 use crate::msg::{ExchangeDate, IssueAssetExchange};
 
@@ -107,10 +104,6 @@ pub fn asset_exchange_storage(storage: &mut dyn Storage) -> Bucket<Vec<AssetExch
     bucket(storage, ASSET_EXCHANGE_NAMESPACE)
 }
 
-pub fn asset_exchange_storage_read(storage: &dyn Storage) -> ReadonlyBucket<Vec<AssetExchange>> {
-    bucket_read(storage, ASSET_EXCHANGE_NAMESPACE)
-}
-
 pub fn pending_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, PENDING_SUBSCRIPTIONS_KEY)
 }
@@ -129,6 +122,8 @@ pub fn accepted_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<H
 
 #[cfg(test)]
 pub mod tests {
+    use cosmwasm_storage::{bucket_read, ReadonlyBucket};
+
     use super::*;
 
     impl State {
@@ -145,6 +140,12 @@ pub mod tests {
                 capital_per_share: 100,
             }
         }
+    }
+
+    pub fn asset_exchange_storage_read(
+        storage: &dyn Storage,
+    ) -> ReadonlyBucket<Vec<AssetExchange>> {
+        bucket_read(storage, ASSET_EXCHANGE_NAMESPACE)
     }
 
     pub fn to_addresses(addresses: Vec<&str>) -> HashSet<Addr> {

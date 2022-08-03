@@ -2,7 +2,6 @@ use crate::error::contract_error;
 use crate::exchange_asset::try_cancel_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
-use crate::recover::try_recover;
 use crate::state::pending_subscriptions;
 use crate::state::pending_subscriptions_read;
 use crate::subscribe::try_accept_subscriptions;
@@ -22,7 +21,7 @@ use crate::state::config;
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
 #[entry_point]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> ContractResponse {
     // look for a contract address from instantiating subscription contract
     if let SubMsgResult::Ok(response) = msg.result {
         if let Some(contract_address) = contract_address(&response.events) {
@@ -59,7 +58,18 @@ pub fn execute(
     msg: HandleMsg,
 ) -> ContractResponse {
     match msg {
-        HandleMsg::Recover { gp } => try_recover(deps, info, gp),
+        HandleMsg::Recover { gp } => {
+            let mut state = config(deps.storage).load()?;
+
+            if info.sender != state.recovery_admin {
+                return contract_error("only admin can recover raise");
+            }
+
+            state.gp = gp;
+            config(deps.storage).save(&state)?;
+
+            Ok(Response::default())
+        }
         HandleMsg::ProposeSubscription {} => try_propose_subscription(deps, env, info),
         HandleMsg::CloseSubscriptions { subscriptions } => {
             try_close_subscriptions(deps, info, subscriptions)
@@ -77,41 +87,30 @@ pub fn execute(
             try_complete_asset_exchange(deps, env, info, exchange, to, memo)
         }
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
-            try_issue_withdrawal(deps, info, env, to, amount, memo)
+            let state = config(deps.storage).load()?;
+
+            if info.sender != state.gp {
+                return contract_error("only gp can redeem capital");
+            }
+
+            let send = BankMsg::Send {
+                to_address: to.to_string(),
+                amount: coins(amount as u128, state.capital_denom),
+            };
+
+            let attributes = match memo {
+                Some(memo) => {
+                    vec![Attribute {
+                        key: String::from("memo"),
+                        value: memo,
+                    }]
+                }
+                None => vec![],
+            };
+
+            Ok(Response::new().add_message(send).add_attributes(attributes))
         }
     }
-}
-
-pub fn try_issue_withdrawal(
-    deps: DepsMut<ProvenanceQuery>,
-    info: MessageInfo,
-    _env: Env,
-    to: Addr,
-    amount: u64,
-    memo: Option<String>,
-) -> ContractResponse {
-    let state = config(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can redeem capital");
-    }
-
-    let send = BankMsg::Send {
-        to_address: to.to_string(),
-        amount: coins(amount as u128, state.capital_denom),
-    };
-
-    let attributes = match memo {
-        Some(memo) => {
-            vec![Attribute {
-                key: String::from("memo"),
-                value: memo,
-            }]
-        }
-        None => vec![],
-    };
-
-    Ok(Response::new().add_message(send).add_attributes(attributes))
 }
 
 #[cfg(test)]
@@ -119,6 +118,7 @@ pub mod tests {
     use super::*;
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
+    use crate::state::config_read;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
     use cosmwasm_std::{Addr, OwnedDeps};
@@ -136,6 +136,44 @@ pub mod tests {
         config(&mut deps.storage).save(&state).unwrap();
 
         deps
+    }
+
+    #[test]
+    fn recover() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("gp_2"),
+            },
+        )
+        .unwrap();
+
+        // verify that gp has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp_2", state.gp);
+    }
+
+    #[test]
+    fn fail_bad_actor_recover() {
+        let mut deps = default_deps(None);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("bad_actor"),
+            },
+        );
+        assert!(res.is_err());
+
+        // verify that gp has NOT been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp", state.gp);
     }
 
     #[test]

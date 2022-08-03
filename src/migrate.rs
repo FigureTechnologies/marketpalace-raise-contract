@@ -165,9 +165,8 @@ impl Hash for SubCapitalCall {
 mod tests {
     use super::*;
     use crate::mock::wasm_smart_mock_dependencies;
-    use crate::state::{
-        accepted_subscriptions_read, asset_exchange_storage_read, pending_subscriptions_read,
-    };
+    use crate::state::tests::asset_exchange_storage_read;
+    use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{to_binary, Addr, ContractResult, SystemResult};
     use cosmwasm_storage::{singleton, singleton_read};

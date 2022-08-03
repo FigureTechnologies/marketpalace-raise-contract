@@ -234,7 +234,7 @@ pub mod tests {
     use crate::mock::send_args;
     use crate::msg::HandleMsg;
     use crate::msg::IssueAssetExchange;
-    use crate::state::asset_exchange_storage_read;
+    use crate::state::tests::asset_exchange_storage_read;
     use crate::state::tests::set_accepted;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::{mock_env, mock_info};
