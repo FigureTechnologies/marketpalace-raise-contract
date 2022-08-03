@@ -66,11 +66,14 @@ pub fn try_close_subscriptions(
                 if state.remaining_commitment(deps.as_ref(), &subscription)? == 0 {
                     accepted.remove(&subscription);
                 } else {
+                    let remaining_commitment = state
+                        .remaining_commitment(deps.as_ref(), &subscription)?
+                        .try_into()?;
                     asset_exchange_storage(deps.storage).save(
                         subscription.as_bytes(),
                         &vec![AssetExchange {
                             investment: None,
-                            commitment: Some(0),
+                            commitment: Some(remaining_commitment),
                             capital: None,
                             date: None,
                         }],
