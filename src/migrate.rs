@@ -1,13 +1,14 @@
 use std::collections::HashSet;
+use std::convert::TryInto;
 use std::hash::Hash;
 
 use crate::contract::ContractResponse;
-use crate::msg::CapitalCall;
 use crate::msg::MigrateMsg;
 use crate::state::accepted_subscriptions;
+use crate::state::asset_exchange_storage;
 use crate::state::config;
-use crate::state::outstanding_capital_calls;
 use crate::state::pending_subscriptions;
+use crate::state::AssetExchange;
 use crate::state::State;
 use crate::state::CONFIG_KEY;
 use crate::version::CONTRACT_NAME;
@@ -46,26 +47,31 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
     let new_pending_subscriptions = old_state.pending_review_subs;
     let new_accepted_subscriptions = old_state.accepted_subs;
 
-    let new_capital_calls = new_accepted_subscriptions
-        .iter()
-        .filter_map(|subscription| {
-            let transactions: Transactions = deps
-                .querier
-                .query_wasm_smart(subscription.clone(), &QueryMsg::GetTransactions {})
-                .unwrap();
+    let mut storage = asset_exchange_storage(deps.storage);
 
-            transactions.capital_calls.active.map(|call| CapitalCall {
-                subscription: subscription.clone(),
-                amount: call.amount,
-                due_epoch_seconds: None,
-            })
-        })
-        .collect();
+    for accepted in &new_accepted_subscriptions {
+        let transactions: Transactions = deps
+            .querier
+            .query_wasm_smart(accepted.clone(), &QueryMsg::GetTransactions {})
+            .unwrap();
+
+        if let Some(call) = transactions.capital_calls.active {
+            let shares: i64 = new_state.capital_to_shares(call.amount).try_into()?;
+            storage.save(
+                accepted.as_bytes(),
+                &vec![AssetExchange {
+                    investment: Some(shares),
+                    commitment: Some(-shares),
+                    capital: Some(-call.amount.try_into()?),
+                    date: None,
+                }],
+            )?;
+        }
+    }
 
     config(deps.storage).save(&new_state)?;
     pending_subscriptions(deps.storage).save(&new_pending_subscriptions)?;
     accepted_subscriptions(deps.storage).save(&new_accepted_subscriptions)?;
-    outstanding_capital_calls(deps.storage).save(&new_capital_calls)?;
 
     Ok(Response::default())
 }
@@ -160,7 +166,7 @@ mod tests {
     use super::*;
     use crate::mock::wasm_smart_mock_dependencies;
     use crate::state::{
-        accepted_subscriptions_read, outstanding_capital_calls_read, pending_subscriptions_read,
+        accepted_subscriptions_read, asset_exchange_storage_read, pending_subscriptions_read,
     };
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::{to_binary, Addr, ContractResult, SystemResult};
@@ -242,8 +248,8 @@ mod tests {
         );
         assert_eq!(
             1,
-            outstanding_capital_calls_read(&deps.storage)
-                .load()
+            asset_exchange_storage_read(&deps.storage)
+                .load(Addr::unchecked("sub_1").as_bytes())
                 .unwrap()
                 .len()
         );

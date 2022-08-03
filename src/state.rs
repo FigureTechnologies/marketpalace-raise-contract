@@ -2,7 +2,6 @@ use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::hash::Hash;
 
 use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
 use cosmwasm_storage::{
@@ -10,9 +9,7 @@ use cosmwasm_storage::{
     Singleton,
 };
 
-use crate::msg::{
-    CapitalCall, CommitmentUpdate, Distribution, ExchangeDate, IssueAssetExchange, Redemption,
-};
+use crate::msg::{ExchangeDate, IssueAssetExchange};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
@@ -20,12 +17,6 @@ pub static ASSET_EXCHANGE_NAMESPACE: &[u8] = b"asset_exchange";
 
 pub static PENDING_SUBSCRIPTIONS_KEY: &[u8] = b"pending_subscriptions";
 pub static ACCEPTED_SUBSCRIPTIONS_KEY: &[u8] = b"accepted_subscriptions";
-pub static SUBSCRIPTION_CLOSURES_KEY: &[u8] = b"subscription_closures";
-pub static CLOSED_SUBSCRIPTIONS_KEY: &[u8] = b"closed_subscriptions";
-pub static COMMITMENT_UPDATES_KEY: &[u8] = b"commitment_updates";
-pub static CAPITAL_CALLS_KEY: &[u8] = b"capital_calls";
-pub static REDEMPTIONS_KEY: &[u8] = b"redemptions";
-pub static DISTRIBUTIONS_KEY: &[u8] = b"distributions";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
@@ -71,28 +62,6 @@ impl State {
                 .into_string(),
             amount: coins(amount, self.commitment_denom.clone()),
         })
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, JsonSchema)]
-pub struct Withdrawal {
-    pub sequence: u16,
-    pub to: Addr,
-    pub amount: u64,
-}
-
-impl PartialEq for Withdrawal {
-    fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
-    }
-}
-
-impl Hash for Withdrawal {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.sequence.hash(state);
     }
 }
 
@@ -156,66 +125,6 @@ pub fn accepted_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Ad
 
 pub fn accepted_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
     singleton_read(storage, ACCEPTED_SUBSCRIPTIONS_KEY)
-}
-
-pub fn outstanding_subscription_closures(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
-    singleton(storage, SUBSCRIPTION_CLOSURES_KEY)
-}
-
-pub fn outstanding_subscription_closures_read(
-    storage: &dyn Storage,
-) -> ReadonlySingleton<HashSet<Addr>> {
-    singleton_read(storage, SUBSCRIPTION_CLOSURES_KEY)
-}
-
-pub fn closed_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
-    singleton(storage, CLOSED_SUBSCRIPTIONS_KEY)
-}
-
-pub fn closed_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
-    singleton_read(storage, CLOSED_SUBSCRIPTIONS_KEY)
-}
-
-pub fn outstanding_commitment_updates(
-    storage: &mut dyn Storage,
-) -> Singleton<HashSet<CommitmentUpdate>> {
-    singleton(storage, COMMITMENT_UPDATES_KEY)
-}
-
-pub fn outstanding_commitment_updates_read(
-    storage: &dyn Storage,
-) -> ReadonlySingleton<HashSet<CommitmentUpdate>> {
-    singleton_read(storage, COMMITMENT_UPDATES_KEY)
-}
-
-pub fn outstanding_capital_calls(storage: &mut dyn Storage) -> Singleton<HashSet<CapitalCall>> {
-    singleton(storage, CAPITAL_CALLS_KEY)
-}
-
-pub fn outstanding_capital_calls_read(
-    storage: &dyn Storage,
-) -> ReadonlySingleton<HashSet<CapitalCall>> {
-    singleton_read(storage, CAPITAL_CALLS_KEY)
-}
-
-pub fn outstanding_redemptions(storage: &mut dyn Storage) -> Singleton<HashSet<Redemption>> {
-    singleton(storage, REDEMPTIONS_KEY)
-}
-
-pub fn outstanding_redemptions_read(
-    storage: &dyn Storage,
-) -> ReadonlySingleton<HashSet<Redemption>> {
-    singleton_read(storage, REDEMPTIONS_KEY)
-}
-
-pub fn outstanding_distributions(storage: &mut dyn Storage) -> Singleton<HashSet<Distribution>> {
-    singleton(storage, DISTRIBUTIONS_KEY)
-}
-
-pub fn outstanding_distributions_read(
-    storage: &dyn Storage,
-) -> ReadonlySingleton<HashSet<Distribution>> {
-    singleton_read(storage, DISTRIBUTIONS_KEY)
 }
 
 #[cfg(test)]

@@ -1,3 +1,5 @@
+use std::num::TryFromIntError;
+
 use cosmwasm_std::StdError;
 use thiserror::Error;
 
@@ -15,6 +17,12 @@ pub enum ContractError {
 impl From<&str> for ContractError {
     fn from(msg: &str) -> Self {
         ContractError::Std(StdError::generic_err(msg))
+    }
+}
+
+impl From<TryFromIntError> for ContractError {
+    fn from(err: TryFromIntError) -> Self {
+        ContractError::Std(StdError::generic_err(err.to_string()))
     }
 }
 

@@ -1,25 +1,13 @@
-use crate::call::try_cancel_calls;
-use crate::call::try_claim_investment;
-use crate::call::try_issue_calls;
-use crate::distribution::try_cancel_distributions;
-use crate::distribution::try_claim_distribution;
-use crate::distribution::try_issue_distributions;
 use crate::error::contract_error;
 use crate::exchange_asset::try_cancel_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
 use crate::recover::try_recover;
-use crate::redemption::try_cancel_redemptions;
-use crate::redemption::try_claim_redemption;
-use crate::redemption::try_issue_redemptions;
 use crate::state::pending_subscriptions;
 use crate::state::pending_subscriptions_read;
-use crate::subscribe::try_accept_commitment_update;
 use crate::subscribe::try_accept_subscriptions;
-use crate::subscribe::try_close_remaining_commitment;
 use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
-use crate::subscribe::try_update_commitments;
 use cosmwasm_std::{
     coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
     Response, SubMsgResult,
@@ -76,12 +64,8 @@ pub fn execute(
         HandleMsg::CloseSubscriptions { subscriptions } => {
             try_close_subscriptions(deps, info, subscriptions)
         }
-        HandleMsg::CloseRemainingCommitment {} => try_close_remaining_commitment(deps, info),
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, info, subscriptions)
-        }
-        HandleMsg::UpdateCommitments { commitment_updates } => {
-            try_update_commitments(deps, info, commitment_updates)
         }
         HandleMsg::IssueAssetExchanges { asset_exchanges } => {
             try_issue_asset_exchanges(deps, info, asset_exchanges)
@@ -91,28 +75,6 @@ pub fn execute(
         }
         HandleMsg::CompleteAssetExchange { exchange, to, memo } => {
             try_complete_asset_exchange(deps, env, info, exchange, to, memo)
-        }
-        HandleMsg::AcceptCommitmentUpdate {} => try_accept_commitment_update(deps, info),
-        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CancelCapitalCalls { subscriptions } => {
-            try_cancel_calls(deps, info, subscriptions)
-        }
-        HandleMsg::ClaimInvestment {} => try_claim_investment(deps, env, info),
-        HandleMsg::IssueRedemptions { redemptions } => {
-            try_issue_redemptions(deps, info, redemptions)
-        }
-        HandleMsg::CancelRedemptions { subscriptions } => {
-            try_cancel_redemptions(deps, info, subscriptions)
-        }
-        HandleMsg::ClaimRedemption { to, memo } => try_claim_redemption(deps, env, info, to, memo),
-        HandleMsg::IssueDistributions { distributions } => {
-            try_issue_distributions(deps, info, distributions)
-        }
-        HandleMsg::CancelDistributions { subscriptions } => {
-            try_cancel_distributions(deps, info, subscriptions)
-        }
-        HandleMsg::ClaimDistribution { to, memo } => {
-            try_claim_distribution(deps, env, info, to, memo)
         }
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             try_issue_withdrawal(deps, info, env, to, amount, memo)
