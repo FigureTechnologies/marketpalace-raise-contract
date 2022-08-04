@@ -1,9 +1,7 @@
 use std::collections::HashSet;
-use std::convert::TryInto;
 use std::hash::Hash;
 
 use crate::contract::ContractResponse;
-use crate::msg::AssetExchange;
 use crate::msg::MigrateMsg;
 use crate::state::accepted_subscriptions;
 use crate::state::asset_exchange_storage;
@@ -49,24 +47,8 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
 
     let mut storage = asset_exchange_storage(deps.storage);
 
-    for accepted in &new_accepted_subscriptions {
-        let transactions: Transactions = deps
-            .querier
-            .query_wasm_smart(accepted.clone(), &QueryMsg::GetTransactions {})
-            .unwrap();
-
-        if let Some(call) = transactions.capital_calls.active {
-            let shares: i64 = new_state.capital_to_shares(call.amount).try_into()?;
-            storage.save(
-                accepted.as_bytes(),
-                &vec![AssetExchange {
-                    investment: Some(shares),
-                    commitment: Some(-shares),
-                    capital: Some(-call.amount.try_into()?),
-                    date: None,
-                }],
-            )?;
-        }
+    for issuance in msg.asset_exchanges {
+        storage.save(issuance.subscription.as_bytes(), &vec![issuance.exchange])?;
     }
 
     config(deps.storage).save(&new_state)?;
@@ -123,48 +105,12 @@ impl Hash for Withdrawal {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum QueryMsg {
-    GetTransactions {},
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Transactions {
-    pub capital_calls: CapitalCalls,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct CapitalCalls {
-    pub active: Option<SubCapitalCall>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq)]
-pub struct SubCapitalCall {
-    pub sequence: u16,
-    pub amount: u64,
-    pub days_of_notice: Option<u16>,
-}
-
-impl PartialEq for SubCapitalCall {
-    fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
-    }
-}
-
-impl Hash for SubCapitalCall {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.sequence.hash(state);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::tests::default_deps;
     use crate::mock::wasm_smart_mock_dependencies;
+    use crate::msg::{AssetExchange, IssueAssetExchange};
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
     use cosmwasm_std::testing::mock_env;
@@ -173,20 +119,7 @@ mod tests {
 
     #[test]
     fn migration() {
-        let mut deps = wasm_smart_mock_dependencies(&vec![], |_, _| {
-            SystemResult::Ok(ContractResult::Ok(
-                to_binary(&Transactions {
-                    capital_calls: CapitalCalls {
-                        active: Some(SubCapitalCall {
-                            sequence: 0,
-                            amount: 10_000,
-                            days_of_notice: None,
-                        }),
-                    },
-                })
-                .unwrap(),
-            ))
-        });
+        let mut deps = default_deps(None);
         singleton(&mut deps.storage, CONFIG_KEY)
             .save(&StateV1_0_1 {
                 subscription_code_id: 0,
@@ -213,6 +146,15 @@ mod tests {
             mock_env(),
             MigrateMsg {
                 subscription_code_id: 1,
+                asset_exchanges: vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_1"),
+                    exchange: AssetExchange {
+                        investment: Some(1_000),
+                        commitment: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    },
+                }],
             },
         )
         .unwrap();
