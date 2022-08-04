@@ -21,7 +21,7 @@ pub enum SubQueryMsg {
 
 #[derive(Deserialize, Serialize)]
 pub struct SubState {
-    pub recovery_admin: Addr,
+    pub admin: Addr,
     pub lp: Addr,
     pub raise: Addr,
     pub commitment_denom: String,

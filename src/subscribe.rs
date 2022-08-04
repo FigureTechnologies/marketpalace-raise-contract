@@ -207,7 +207,7 @@ mod tests {
         wasm_smart_mock_dependencies(&vec![], |_, _| {
             SystemResult::Ok(ContractResult::Ok(
                 to_binary(&SubState {
-                    recovery_admin: Addr::unchecked("marketpalace"),
+                    admin: Addr::unchecked("marketpalace"),
                     lp: Addr::unchecked("lp"),
                     raise: Addr::unchecked("raise_1"),
                     commitment_denom: String::from("raise_1.commitment"),

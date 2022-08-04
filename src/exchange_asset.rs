@@ -109,34 +109,11 @@ pub fn try_complete_asset_exchange(
         }
     }
 
-    let sent_investment = info
-        .funds
-        .iter()
-        .find(|e| e.denom == state.investment_denom)
-        .map(|coin| coin.amount.u128())
-        .unwrap_or_default();
-    let sent_commitment = info
-        .funds
-        .iter()
-        .find(|e| e.denom == state.commitment_denom)
-        .map(|coin| coin.amount.u128())
-        .unwrap_or_default();
-    let sent_capital = info
-        .funds
-        .iter()
-        .find(|e| e.denom == state.capital_denom)
-        .map(|coin| coin.amount.u128())
-        .unwrap_or_default();
-
     let mut response = Response::new();
 
     if let Some(investment) = exchange.investment {
         let abs_investment = investment.unsigned_abs();
         if investment < 0 {
-            if sent_investment != abs_investment.into() {
-                return contract_error("incorrect investment sent");
-            }
-
             let investment_marker = ProvenanceQuerier::new(&deps.querier)
                 .get_marker_by_denom(state.investment_denom.clone())?;
             let deposit_investment = BankMsg::Send {
@@ -168,10 +145,6 @@ pub fn try_complete_asset_exchange(
     if let Some(commitment) = exchange.commitment {
         let abs_commitment = commitment.unsigned_abs();
         if commitment < 0 {
-            if sent_commitment != abs_commitment.into() {
-                return contract_error("incorrect commitment sent");
-            }
-
             let deposit_commitment =
                 state.deposit_commitment_msg(deps.as_ref(), abs_commitment.into())?;
             let burn_commitment =
@@ -198,11 +171,7 @@ pub fn try_complete_asset_exchange(
 
     if let Some(capital) = exchange.capital {
         let abs_capital = capital.unsigned_abs();
-        if capital < 0 {
-            if sent_capital != abs_capital.into() {
-                return contract_error("incorrect capital sent");
-            }
-        } else {
+        if capital > 0 {
             let send_capital = BankMsg::Send {
                 to_address: to.unwrap_or(info.sender).into_string(),
                 amount: coins(abs_capital.into(), state.capital_denom),
