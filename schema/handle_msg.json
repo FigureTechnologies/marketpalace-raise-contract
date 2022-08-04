@@ -289,39 +289,12 @@
     "IssueAssetExchange": {
       "type": "object",
       "required": [
+        "exchange",
         "subscription"
       ],
       "properties": {
-        "capital": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "commitment": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
-        },
-        "date": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ExchangeDate"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "investment": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int64"
+        "exchange": {
+          "$ref": "#/definitions/AssetExchange"
         },
         "subscription": {
           "$ref": "#/definitions/Addr"

@@ -1,8 +1,8 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
-use crate::msg::AcceptSubscription;
+use crate::msg::{AcceptSubscription, AssetExchange};
+use crate::state::asset_exchange_storage;
 use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
-use crate::state::{asset_exchange_storage, AssetExchange};
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg, SubState};
 use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;

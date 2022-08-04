@@ -6,8 +6,8 @@ use provwasm_std::{
 use crate::{
     contract::ContractResponse,
     error::contract_error,
-    msg::{ExchangeDate, IssueAssetExchange},
-    state::{accepted_subscriptions_read, asset_exchange_storage, config_read, AssetExchange},
+    msg::{AssetExchange, ExchangeDate, IssueAssetExchange},
+    state::{accepted_subscriptions_read, asset_exchange_storage, config_read},
 };
 
 pub fn try_issue_asset_exchanges(
@@ -25,23 +25,18 @@ pub fn try_issue_asset_exchanges(
         return contract_error("only gp can issue redemptions");
     }
 
-    for exchange in asset_exchanges {
-        if !accepted.contains(&exchange.subscription) {
+    for issuance in asset_exchanges {
+        if !accepted.contains(&issuance.subscription) {
             return contract_error("subscription not accepted");
         }
 
         let mut existing = storage
-            .may_load(exchange.subscription.as_bytes())?
+            .may_load(issuance.subscription.as_bytes())?
             .unwrap_or_default();
 
-        existing.push(AssetExchange {
-            investment: exchange.investment,
-            commitment: exchange.commitment,
-            capital: exchange.capital,
-            date: exchange.date,
-        });
+        existing.push(issuance.exchange.clone());
 
-        storage.save(exchange.subscription.as_bytes(), &existing)?;
+        storage.save(issuance.subscription.as_bytes(), &existing)?;
     }
 
     Ok(Response::default())
@@ -66,7 +61,7 @@ pub fn try_cancel_asset_exchanges(
 
         let index = existing
             .iter()
-            .position(|e| &AssetExchange::from(cancel) == e)
+            .position(|e| &cancel.exchange == e)
             .ok_or("no asset exchange found for subcription")?;
         existing.remove(index);
 
@@ -282,10 +277,12 @@ pub mod tests {
             HandleMsg::IssueAssetExchanges {
                 asset_exchanges: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    investment: Some(1_000),
-                    commitment: Some(-1_000),
-                    capital: Some(-1_000),
-                    date: None,
+                    exchange: AssetExchange {
+                        investment: Some(1_000),
+                        commitment: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    },
                 }],
             },
         )
@@ -324,10 +321,12 @@ pub mod tests {
             HandleMsg::IssueAssetExchanges {
                 asset_exchanges: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    investment: Some(1_000),
-                    commitment: Some(-1_000),
-                    capital: Some(-1_000),
-                    date: None,
+                    exchange: AssetExchange {
+                        investment: Some(1_000),
+                        commitment: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    },
                 }],
             },
         );
@@ -359,10 +358,12 @@ pub mod tests {
             HandleMsg::CancelAssetExchanges {
                 cancellations: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    investment: Some(1_000),
-                    commitment: Some(-1_000),
-                    capital: Some(-1_000),
-                    date: None,
+                    exchange: AssetExchange {
+                        investment: Some(1_000),
+                        commitment: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    },
                 }],
             },
         )
@@ -401,10 +402,12 @@ pub mod tests {
             HandleMsg::CancelAssetExchanges {
                 cancellations: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    investment: Some(1_000),
-                    commitment: Some(-1_000),
-                    capital: Some(-1_000),
-                    date: None,
+                    exchange: AssetExchange {
+                        investment: Some(1_000),
+                        commitment: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    },
                 }],
             },
         );

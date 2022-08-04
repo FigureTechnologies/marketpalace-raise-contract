@@ -3,12 +3,12 @@ use std::convert::TryInto;
 use std::hash::Hash;
 
 use crate::contract::ContractResponse;
+use crate::msg::AssetExchange;
 use crate::msg::MigrateMsg;
 use crate::state::accepted_subscriptions;
 use crate::state::asset_exchange_storage;
 use crate::state::config;
 use crate::state::pending_subscriptions;
-use crate::state::AssetExchange;
 use crate::state::State;
 use crate::state::CONFIG_KEY;
 use crate::version::CONTRACT_NAME;

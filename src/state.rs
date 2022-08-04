@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
 use cosmwasm_storage::{bucket, singleton, singleton_read, Bucket, ReadonlySingleton, Singleton};
 
-use crate::msg::{ExchangeDate, IssueAssetExchange};
+use crate::msg::AssetExchange;
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
@@ -68,36 +68,6 @@ pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
 
 pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct AssetExchange {
-    #[serde(rename = "inv")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub investment: Option<i64>,
-    #[serde(rename = "com")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub commitment: Option<i64>,
-    #[serde(rename = "cap")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub capital: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub date: Option<ExchangeDate>,
-}
-
-impl From<&IssueAssetExchange> for AssetExchange {
-    fn from(issuance: &IssueAssetExchange) -> Self {
-        AssetExchange {
-            investment: issuance.investment,
-            commitment: issuance.commitment,
-            capital: issuance.capital,
-            date: issuance.date.clone(),
-        }
-    }
 }
 
 pub fn asset_exchange_storage(storage: &mut dyn Storage) -> Bucket<Vec<AssetExchange>> {

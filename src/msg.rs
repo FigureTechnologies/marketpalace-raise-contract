@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use cosmwasm_std::Addr;
 
-use crate::state::{AssetExchange, State};
+use crate::state::State;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -62,9 +62,25 @@ pub struct AcceptSubscription {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct IssueAssetExchange {
     pub subscription: Addr,
+    pub exchange: AssetExchange,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct AssetExchange {
+    #[serde(rename = "inv")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub investment: Option<i64>,
+    #[serde(rename = "com")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub commitment: Option<i64>,
+    #[serde(rename = "cap")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub capital: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub date: Option<ExchangeDate>,
 }
 
