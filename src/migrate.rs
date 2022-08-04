@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::hash::Hash;
 
 use crate::contract::ContractResponse;
 use crate::msg::MigrateMsg;
@@ -60,8 +59,6 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct StateV1_0_1 {
-    pub subscription_code_id: u64,
-    pub status: Status,
     pub recovery_admin: Addr,
     pub gp: Addr,
     pub acceptable_accreditations: HashSet<String>,
@@ -70,51 +67,19 @@ struct StateV1_0_1 {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
-    pub min_commitment: Option<u64>,
-    pub max_commitment: Option<u64>,
-    pub sequence: u16,
     pub pending_review_subs: HashSet<Addr>,
     pub accepted_subs: HashSet<Addr>,
-    pub issued_withdrawals: HashSet<Withdrawal>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum Status {
-    Active,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq)]
-pub struct Withdrawal {
-    pub sequence: u16,
-    pub to: Addr,
-    pub amount: u64,
-}
-
-impl PartialEq for Withdrawal {
-    fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
-    }
-}
-
-impl Hash for Withdrawal {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.sequence.hash(state);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::contract::tests::default_deps;
-    use crate::mock::wasm_smart_mock_dependencies;
     use crate::msg::{AssetExchange, IssueAssetExchange};
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{to_binary, Addr, ContractResult, SystemResult};
+    use cosmwasm_std::Addr;
     use cosmwasm_storage::{singleton, singleton_read};
 
     #[test]
@@ -122,8 +87,6 @@ mod tests {
         let mut deps = default_deps(None);
         singleton(&mut deps.storage, CONFIG_KEY)
             .save(&StateV1_0_1 {
-                subscription_code_id: 0,
-                status: Status::Active,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
                 acceptable_accreditations: HashSet::new(),
@@ -132,12 +95,8 @@ mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
-                min_commitment: None,
-                max_commitment: None,
-                sequence: 0,
                 pending_review_subs: vec![Addr::unchecked("sub_2")].into_iter().collect(),
                 accepted_subs: vec![Addr::unchecked("sub_1")].into_iter().collect(),
-                issued_withdrawals: vec![].into_iter().collect(),
             })
             .unwrap();
 
