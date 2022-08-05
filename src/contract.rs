@@ -70,7 +70,9 @@ pub fn execute(
 
             Ok(Response::default())
         }
-        HandleMsg::ProposeSubscription {} => try_propose_subscription(deps, env, info),
+        HandleMsg::ProposeSubscription { initial_commitment } => {
+            try_propose_subscription(deps, env, info, initial_commitment)
+        }
         HandleMsg::CloseSubscriptions { subscriptions } => {
             try_close_subscriptions(deps, info, subscriptions)
         }

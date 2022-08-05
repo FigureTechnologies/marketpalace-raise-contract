@@ -29,7 +29,17 @@
       ],
       "properties": {
         "propose_subscription": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "initial_commitment": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
         }
       },
       "additionalProperties": false

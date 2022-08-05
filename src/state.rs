@@ -98,7 +98,7 @@ pub mod tests {
     impl State {
         pub fn test_default() -> State {
             State {
-                subscription_code_id: 0,
+                subscription_code_id: 100,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
                 acceptable_accreditations: HashSet::new(),

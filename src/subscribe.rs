@@ -17,6 +17,7 @@ pub fn try_propose_subscription(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
+    initial_commitment: Option<u64>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
@@ -31,6 +32,7 @@ pub fn try_propose_subscription(
                 investment_denom: state.investment_denom,
                 capital_denom: state.capital_denom,
                 capital_per_share: state.capital_per_share,
+                initial_commitment,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -157,7 +159,9 @@ mod tests {
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::mock::{wasm_smart_mock_dependencies, MockContractQuerier};
+    use crate::mock::{
+        instantiate_args, msg_at_index, wasm_smart_mock_dependencies, MockContractQuerier,
+    };
     use crate::msg::HandleMsg;
     use crate::msg::QueryMsg;
     use crate::msg::RaiseState;
@@ -209,10 +213,32 @@ mod tests {
             deps.as_mut(),
             mock_env(),
             mock_info("lp", &[]),
-            HandleMsg::ProposeSubscription {},
+            HandleMsg::ProposeSubscription {
+                initial_commitment: Some(100),
+            },
         )
         .unwrap();
+
+        // verify instantiate message
         assert_eq!(1, res.messages.len());
+        let (admin, code_id, msg, funds, label) =
+            instantiate_args::<SubInstantiateMsg>(msg_at_index(&res, 0));
+        assert_eq!("cosmos2contract", admin.clone().unwrap());
+        assert_eq!(&100, code_id);
+        assert_eq!(
+            SubInstantiateMsg {
+                admin: Addr::unchecked("marketpalace"),
+                lp: Addr::unchecked("lp"),
+                commitment_denom: String::from("commitment_coin"),
+                investment_denom: String::from("investment_coin"),
+                capital_denom: String::from("stable_coin"),
+                capital_per_share: 100,
+                initial_commitment: Some(100),
+            },
+            msg
+        );
+        assert_eq!(0, funds.len());
+        assert_eq!("establish subscription", label);
     }
 
     #[test]

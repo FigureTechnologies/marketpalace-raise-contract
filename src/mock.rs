@@ -132,6 +132,23 @@ pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
     }
 }
 
+pub fn instantiate_args<T: DeserializeOwned>(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> (&Option<String>, &u64, T, &Vec<Coin>, &String) {
+    if let WasmMsg::Instantiate {
+        admin,
+        code_id,
+        msg,
+        funds,
+        label,
+    } = wasm_msg(msg)
+    {
+        (admin, code_id, from_binary::<T>(msg).unwrap(), funds, label)
+    } else {
+        panic!("not a wasm execute message")
+    }
+}
+
 pub fn execute_args<T: DeserializeOwned>(
     msg: &CosmosMsg<ProvenanceMsg>,
 ) -> (&String, T, &Vec<Coin>) {
