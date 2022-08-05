@@ -5,7 +5,7 @@ use cosmwasm_std::Addr;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct SubInstantiateMsg {
-    pub recovery_admin: Addr,
+    pub admin: Addr,
     pub lp: Addr,
     pub commitment_denom: String,
     pub investment_denom: String,

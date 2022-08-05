@@ -212,11 +212,11 @@ pub mod tests {
             investment: Some(-1_000),
             commitment: None,
             capital: Some(1_000),
-            date: None,
+            date: Some(ExchangeDate::Available(0)),
         };
         let as_bytes = to_binary(&exchange).unwrap();
         println!("{}", std::str::from_utf8(as_bytes.as_slice()).unwrap());
-        assert_eq!(24, as_bytes.len());
+        assert_eq!(41, as_bytes.len());
 
         println!("{:?}", from_binary::<AssetExchange>(&as_bytes).unwrap());
     }

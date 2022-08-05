@@ -25,7 +25,7 @@ pub fn try_propose_subscription(
             admin: Some(env.contract.address.into_string()),
             code_id: state.subscription_code_id,
             msg: to_binary(&SubInstantiateMsg {
-                recovery_admin: state.recovery_admin,
+                admin: state.recovery_admin,
                 lp: info.sender,
                 commitment_denom: state.commitment_denom,
                 investment_denom: state.investment_denom,
