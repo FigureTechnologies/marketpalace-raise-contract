@@ -28,7 +28,6 @@ pub fn instantiate(
         recovery_admin: msg.recovery_admin,
         gp: info.sender,
         acceptable_accreditations: msg.acceptable_accreditations,
-        other_required_tags: msg.other_required_tags,
         commitment_denom: format!("{}.commitment", env.contract.address),
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
@@ -91,7 +90,6 @@ mod tests {
                 subscription_code_id: 0,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 acceptable_accreditations: HashSet::new(),
-                other_required_tags: HashSet::new(),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
             },
@@ -187,7 +185,6 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
         let state: RaiseState = from_binary(&res).unwrap();
         assert_eq!(0, state.general.acceptable_accreditations.len());
-        assert_eq!(0, state.general.other_required_tags.len());
         assert_eq!(
             format!("{}.commitment", MOCK_CONTRACT_ADDR),
             state.general.commitment_denom

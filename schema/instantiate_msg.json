@@ -6,7 +6,6 @@
     "acceptable_accreditations",
     "capital_denom",
     "capital_per_share",
-    "other_required_tags",
     "recovery_admin",
     "subscription_code_id"
   ],
@@ -25,13 +24,6 @@
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
-    },
-    "other_required_tags": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "uniqueItems": true
     },
     "recovery_admin": {
       "$ref": "#/definitions/Addr"

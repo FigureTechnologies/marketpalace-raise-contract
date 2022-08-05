@@ -4,11 +4,9 @@ use crate::msg::{AcceptSubscription, AssetExchange};
 use crate::state::asset_exchange_storage;
 use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg, SubState};
-use cosmwasm_std::Deps;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
-use cosmwasm_std::StdResult;
 use cosmwasm_std::{to_binary, Addr, Env, SubMsg, WasmMsg};
 use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
@@ -113,22 +111,21 @@ pub fn try_accept_subscriptions(
             .querier
             .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetState {})?;
 
-        let attributes = get_attributes(deps.as_ref(), &sub_state)?;
+        let attributes: HashSet<String> = ProvenanceQuerier::new(&deps.querier)
+            .get_attributes(sub_state.lp.clone(), None as Option<String>)
+            .unwrap()
+            .attributes
+            .into_iter()
+            .map(|attribute| attribute.name)
+            .collect();
 
         if !state.acceptable_accreditations.is_empty()
-            && no_matches(&attributes, &state.acceptable_accreditations)
+            && attributes
+                .intersection(&state.acceptable_accreditations)
+                .count()
+                == 0
         {
-            return contract_error(&format!(
-                "subscription owner must have one of acceptable accreditations: {:?}",
-                state.acceptable_accreditations
-            ));
-        }
-
-        if missing_any(&attributes, &state.other_required_tags) {
-            return contract_error(&format!(
-                "subscription owner must have all other required tags: {:?}",
-                state.other_required_tags
-            ));
+            return contract_error("subscription owner must have one of acceptable accreditations");
         }
 
         if state.not_evenly_divisble(accept.commitment) {
@@ -153,24 +150,6 @@ pub fn try_accept_subscriptions(
     accepted_subscriptions(deps.storage).save(&accepted)?;
 
     Ok(Response::default())
-}
-
-fn get_attributes(deps: Deps<ProvenanceQuery>, sub_state: &SubState) -> StdResult<HashSet<String>> {
-    Ok(ProvenanceQuerier::new(&deps.querier)
-        .get_attributes(sub_state.lp.clone(), None as Option<String>)
-        .unwrap()
-        .attributes
-        .into_iter()
-        .map(|attribute| attribute.name)
-        .collect())
-}
-
-fn no_matches(a: &HashSet<String>, b: &HashSet<String>) -> bool {
-    a.intersection(b).count() == 0
-}
-
-fn missing_any(a: &HashSet<String>, b: &HashSet<String>) -> bool {
-    a.intersection(b).count() != b.len()
 }
 
 #[cfg(test)]
@@ -432,33 +411,6 @@ mod tests {
 
         let mut state = State::test_default();
         state.acceptable_accreditations = vec![String::from("506c")].into_iter().collect();
-        config(&mut deps.storage).save(&state).unwrap();
-
-        set_pending(&mut deps.storage, vec!["sub_1"]);
-
-        // accept pending sub as gp
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bad_actor", &[]),
-            HandleMsg::AcceptSubscriptions {
-                subscriptions: vec![AcceptSubscription {
-                    subscription: Addr::unchecked("sub_1"),
-                    commitment: 20_000,
-                }]
-                .into_iter()
-                .collect(),
-            },
-        );
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn accept_subscription_missing_required_tag() {
-        let mut deps = mock_sub_state();
-
-        let mut state = State::test_default();
-        state.other_required_tags = vec![String::from("misc")].into_iter().collect();
         config(&mut deps.storage).save(&state).unwrap();
 
         set_pending(&mut deps.storage, vec!["sub_1"]);

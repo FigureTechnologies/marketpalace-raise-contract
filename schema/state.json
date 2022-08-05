@@ -9,7 +9,6 @@
     "commitment_denom",
     "gp",
     "investment_denom",
-    "other_required_tags",
     "recovery_admin",
     "subscription_code_id"
   ],
@@ -37,13 +36,6 @@
     },
     "investment_denom": {
       "type": "string"
-    },
-    "other_required_tags": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "uniqueItems": true
     },
     "recovery_admin": {
       "$ref": "#/definitions/Addr"

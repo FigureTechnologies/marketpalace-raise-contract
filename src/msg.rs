@@ -11,7 +11,6 @@ pub struct InstantiateMsg {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
     pub acceptable_accreditations: HashSet<String>,
-    pub other_required_tags: HashSet<String>,
     pub capital_denom: String,
     pub capital_per_share: u64,
 }
