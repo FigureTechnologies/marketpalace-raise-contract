@@ -7,12 +7,15 @@ use crate::state::pending_subscriptions_read;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
+use cosmwasm_std::to_binary;
+use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{
     coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
     Response, SubMsgResult,
 };
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceQuery;
+use serde::Serialize;
 
 use crate::error::ContractError;
 use crate::msg::HandleMsg;
@@ -50,6 +53,9 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
     })
 }
 
+#[derive(Serialize)]
+struct EmptyArgs {}
+
 #[entry_point]
 pub fn execute(
     deps: DepsMut<ProvenanceQuery>,
@@ -69,6 +75,17 @@ pub fn execute(
             config(deps.storage).save(&state)?;
 
             Ok(Response::default())
+        }
+        HandleMsg::MigrateSubcriptions { subscriptions } => {
+            let state = config(deps.storage).load()?;
+
+            Ok(
+                Response::new().add_messages(subscriptions.iter().map(|sub| WasmMsg::Migrate {
+                    contract_addr: sub.to_string(),
+                    new_code_id: state.subscription_code_id,
+                    msg: to_binary(&EmptyArgs {}).unwrap(),
+                })),
+            )
         }
         HandleMsg::ProposeSubscription { initial_commitment } => {
             try_propose_subscription(deps, env, info, initial_commitment)

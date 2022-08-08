@@ -28,6 +28,9 @@ pub enum HandleMsg {
     Recover {
         gp: Addr,
     },
+    MigrateSubcriptions {
+        subscriptions: HashSet<Addr>,
+    },
     ProposeSubscription {
         initial_commitment: Option<u64>,
     },

@@ -25,6 +25,30 @@
     {
       "type": "object",
       "required": [
+        "migrate_subcriptions"
+      ],
+      "properties": {
+        "migrate_subcriptions": {
+          "type": "object",
+          "required": [
+            "subscriptions"
+          ],
+          "properties": {
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "propose_subscription"
       ],
       "properties": {
