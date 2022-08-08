@@ -76,7 +76,7 @@ pub fn execute(
 
             Ok(Response::default())
         }
-        HandleMsg::MigrateSubcriptions { subscriptions } => {
+        HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
 
             Ok(
