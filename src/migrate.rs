@@ -108,7 +108,7 @@ mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     exchange: AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     },

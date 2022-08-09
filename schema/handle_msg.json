@@ -234,11 +234,11 @@
     "AcceptSubscription": {
       "type": "object",
       "required": [
-        "commitment",
+        "commitment_in_capital",
         "subscription"
       ],
       "properties": {
-        "commitment": {
+        "commitment_in_capital": {
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0

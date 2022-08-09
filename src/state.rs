@@ -1,9 +1,8 @@
-use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-use cosmwasm_std::{coins, Addr, BankMsg, Deps, StdResult, Storage};
+use cosmwasm_std::{Addr, Storage};
 use cosmwasm_storage::{bucket, singleton, singleton_read, Bucket, ReadonlySingleton, Singleton};
 
 use crate::msg::AssetExchange;
@@ -34,30 +33,6 @@ impl State {
 
     pub fn capital_to_shares(&self, amount: u64) -> u64 {
         amount / self.capital_per_share
-    }
-
-    pub fn remaining_commitment(
-        &self,
-        deps: Deps<ProvenanceQuery>,
-        subscription: &Addr,
-    ) -> StdResult<u128> {
-        deps.querier
-            .query_balance(subscription, self.commitment_denom.clone())
-            .map(|coin| coin.amount.u128())
-    }
-
-    pub fn deposit_commitment_msg(
-        &self,
-        deps: Deps<ProvenanceQuery>,
-        amount: u128,
-    ) -> StdResult<BankMsg> {
-        Ok(BankMsg::Send {
-            to_address: ProvenanceQuerier::new(&deps.querier)
-                .get_marker_by_denom(self.commitment_denom.clone())?
-                .address
-                .into_string(),
-            amount: coins(amount, self.commitment_denom.clone()),
-        })
     }
 }
 

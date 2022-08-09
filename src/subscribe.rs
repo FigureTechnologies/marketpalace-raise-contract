@@ -63,7 +63,11 @@ pub fn try_close_subscriptions(
     for subscription in subscriptions {
         if !pending.remove(&subscription) {
             if accepted.contains(&subscription) {
-                if state.remaining_commitment(deps.as_ref(), &subscription)? == 0 {
+                let remaining_commitment = deps
+                    .querier
+                    .query_balance(subscription.as_str(), state.commitment_denom.clone())
+                    .map(|coin| coin.amount.u128())?;
+                if remaining_commitment == 0 {
                     accepted.remove(&subscription);
                     asset_exchange_storage(deps.storage).remove(subscription.as_bytes());
                 } else {
@@ -120,7 +124,7 @@ pub fn try_accept_subscriptions(
             return contract_error("subscription owner must have one of acceptable accreditations");
         }
 
-        if state.not_evenly_divisble(accept.commitment) {
+        if state.not_evenly_divisble(accept.commitment_in_capital) {
             return contract_error("accept amount must be evenly divisble by capital per share");
         }
     }
@@ -132,7 +136,11 @@ pub fn try_accept_subscriptions(
             accept.subscription.as_bytes(),
             &vec![AssetExchange {
                 investment: None,
-                commitment: Some(accept.commitment.try_into()?),
+                commitment_in_shares: Some(
+                    state
+                        .capital_to_shares(accept.commitment_in_capital)
+                        .try_into()?,
+                ),
                 capital: None,
                 date: None,
             }],
@@ -293,7 +301,7 @@ mod tests {
                 Addr::unchecked("sub_1").as_bytes(),
                 &vec![AssetExchange {
                     investment: Some(1_000),
-                    commitment: Some(-1_000),
+                    commitment_in_shares: Some(-1_000),
                     capital: Some(-1_000),
                     date: None,
                 }],
@@ -404,7 +412,7 @@ mod tests {
             HandleMsg::AcceptSubscriptions {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
-                    commitment: 20_000,
+                    commitment_in_capital: 20_000,
                 }]
                 .into_iter()
                 .collect(),
@@ -420,11 +428,18 @@ mod tests {
 
         // verify asset exchange exists
         assert_eq!(
-            1,
+            &AssetExchange {
+                investment: None,
+                commitment_in_shares: Some(200),
+                capital: None,
+                date: None,
+            },
             asset_exchange_storage_read(&mut deps.storage)
                 .load(Addr::unchecked("sub_1").as_bytes())
                 .unwrap()
-                .len()
+                .iter()
+                .next()
+                .unwrap()
         )
     }
 
@@ -441,7 +456,7 @@ mod tests {
             HandleMsg::AcceptSubscriptions {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
-                    commitment: 20_000,
+                    commitment_in_capital: 20_000,
                 }]
                 .into_iter()
                 .collect(),
@@ -468,7 +483,7 @@ mod tests {
             HandleMsg::AcceptSubscriptions {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
-                    commitment: 20_000,
+                    commitment_in_capital: 20_000,
                 }]
                 .into_iter()
                 .collect(),
@@ -490,7 +505,7 @@ mod tests {
             HandleMsg::AcceptSubscriptions {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
-                    commitment: 20_001,
+                    commitment_in_capital: 20_001,
                 }]
                 .into_iter()
                 .collect(),

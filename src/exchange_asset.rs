@@ -142,11 +142,16 @@ pub fn try_complete_asset_exchange(
         }
     }
 
-    if let Some(commitment) = exchange.commitment {
-        let abs_commitment = commitment.unsigned_abs();
-        if commitment < 0 {
-            let deposit_commitment =
-                state.deposit_commitment_msg(deps.as_ref(), abs_commitment.into())?;
+    if let Some(commitment_in_shares) = exchange.commitment_in_shares {
+        let abs_commitment = commitment_in_shares.unsigned_abs();
+        if commitment_in_shares < 0 {
+            let deposit_commitment = BankMsg::Send {
+                to_address: ProvenanceQuerier::new(&deps.querier)
+                    .get_marker_by_denom(state.commitment_denom.clone())?
+                    .address
+                    .into_string(),
+                amount: coins(abs_commitment.into(), state.commitment_denom.clone()),
+            };
             let burn_commitment =
                 burn_marker_supply(abs_commitment.into(), state.commitment_denom)?;
 
@@ -210,7 +215,7 @@ pub mod tests {
     fn size() {
         let exchange = AssetExchange {
             investment: Some(-1_000),
-            commitment: None,
+            commitment_in_shares: None,
             capital: Some(1_000),
             date: Some(ExchangeDate::Available(0)),
         };
@@ -231,7 +236,7 @@ pub mod tests {
                     Addr::unchecked("sub_1").as_bytes(),
                     &vec![AssetExchange {
                         investment: None,
-                        commitment: Some(1_000),
+                        commitment_in_shares: Some(1_000),
                         capital: None,
                         date: None,
                     }],
@@ -248,7 +253,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     exchange: AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     },
@@ -292,7 +297,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     exchange: AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     },
@@ -312,7 +317,7 @@ pub mod tests {
                     Addr::unchecked("sub_1").as_bytes(),
                     &vec![AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -329,7 +334,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     exchange: AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     },
@@ -373,7 +378,7 @@ pub mod tests {
                     subscription: Addr::unchecked("sub_1"),
                     exchange: AssetExchange {
                         investment: Some(1_000),
-                        commitment: Some(-1_000),
+                        commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
                     },
@@ -394,7 +399,7 @@ pub mod tests {
                     Addr::unchecked("sub_1").as_bytes(),
                     &vec![AssetExchange {
                         investment: Some(-1_000),
-                        commitment: None,
+                        commitment_in_shares: None,
                         capital: Some(1_000),
                         date: None,
                     }],
@@ -409,7 +414,7 @@ pub mod tests {
             HandleMsg::CompleteAssetExchange {
                 exchange: AssetExchange {
                     investment: Some(-1_000),
-                    commitment: None,
+                    commitment_in_shares: None,
                     capital: Some(1_000),
                     date: None,
                 },
@@ -465,7 +470,7 @@ pub mod tests {
                     Addr::unchecked("sub_1").as_bytes(),
                     &vec![AssetExchange {
                         investment: Some(-1_000),
-                        commitment: None,
+                        commitment_in_shares: None,
                         capital: Some(1_000),
                         date: None,
                     }],
@@ -480,7 +485,7 @@ pub mod tests {
             HandleMsg::CompleteAssetExchange {
                 exchange: AssetExchange {
                     investment: Some(-1_000),
-                    commitment: None,
+                    commitment_in_shares: None,
                     capital: Some(1_000),
                     date: None,
                 },
@@ -502,7 +507,7 @@ pub mod tests {
                     Addr::unchecked("sub_1").as_bytes(),
                     &vec![AssetExchange {
                         investment: Some(-1_000),
-                        commitment: None,
+                        commitment_in_shares: None,
                         capital: Some(1_000),
                         date: Some(ExchangeDate::Available(1675209600)), // Feb 01 2023 UTC
                     }],
@@ -519,7 +524,7 @@ pub mod tests {
             HandleMsg::CompleteAssetExchange {
                 exchange: AssetExchange {
                     investment: Some(-1_000),
-                    commitment: None,
+                    commitment_in_shares: None,
                     capital: Some(1_000),
                     date: None,
                 },
