@@ -24,7 +24,7 @@ use crate::state::config;
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
 #[entry_point]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> ContractResponse {
+pub fn reply(deps: DepsMut<ProvenanceQuery>, _env: Env, msg: Reply) -> ContractResponse {
     // look for a contract address from instantiating subscription contract
     if let SubMsgResult::Ok(response) = msg.result {
         if let Some(contract_address) = contract_address(&response.events) {

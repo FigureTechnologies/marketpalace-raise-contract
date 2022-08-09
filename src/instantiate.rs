@@ -184,6 +184,9 @@ mod tests {
         // verify that terms of raise are correct
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
         let state: RaiseState = from_binary(&res).unwrap();
+        assert_eq!(0, state.general.subscription_code_id);
+        assert_eq!("marketpalace", state.general.recovery_admin);
+        assert_eq!("gp", state.general.gp);
         assert_eq!(0, state.general.acceptable_accreditations.len());
         assert_eq!(
             format!("{}.commitment", MOCK_CONTRACT_ADDR),
@@ -194,5 +197,6 @@ mod tests {
             state.general.investment_denom
         );
         assert_eq!("stable_coin", state.general.capital_denom);
+        assert_eq!(100, state.general.capital_per_share);
     }
 }

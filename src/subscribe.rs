@@ -65,19 +65,9 @@ pub fn try_close_subscriptions(
             if accepted.contains(&subscription) {
                 if state.remaining_commitment(deps.as_ref(), &subscription)? == 0 {
                     accepted.remove(&subscription);
+                    asset_exchange_storage(deps.storage).remove(subscription.as_bytes());
                 } else {
-                    let remaining_commitment = state
-                        .remaining_commitment(deps.as_ref(), &subscription)?
-                        .try_into()?;
-                    asset_exchange_storage(deps.storage).save(
-                        subscription.as_bytes(),
-                        &vec![AssetExchange {
-                            investment: None,
-                            commitment: Some(remaining_commitment),
-                            capital: None,
-                            date: None,
-                        }],
-                    )?;
+                    return contract_error("sub still has remaining commitment");
                 }
             } else {
                 return contract_error("no subscription pending or accepted to close");
@@ -157,8 +147,8 @@ pub fn try_accept_subscriptions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::execute;
     use crate::contract::tests::default_deps;
+    use crate::contract::{execute, reply};
     use crate::mock::{
         instantiate_args, msg_at_index, wasm_smart_mock_dependencies, MockContractQuerier,
     };
@@ -173,7 +163,6 @@ mod tests {
     use crate::state::tests::to_addresses;
     use crate::state::tests::{asset_exchange_storage_read, set_accepted};
     use crate::state::State;
-    use cosmwasm_std::coins;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
@@ -184,6 +173,7 @@ mod tests {
     use cosmwasm_std::MemoryStorage;
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
+    use cosmwasm_std::{coins, Event, Reply, SubMsgResponse};
 
     pub fn mock_sub_state(
     ) -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
@@ -239,6 +229,33 @@ mod tests {
         );
         assert_eq!(0, funds.len());
         assert_eq!("establish subscription", label);
+
+        reply(
+            deps.as_mut(),
+            mock_env(),
+            Reply {
+                id: 1,
+                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
+                    events: vec![
+                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
+                    ],
+                    data: None,
+                }),
+            },
+        )
+        .unwrap();
+
+        // verify pending sub saved
+        assert_eq!(
+            "sub_1",
+            pending_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str()
+        );
     }
 
     #[test]
@@ -271,6 +288,17 @@ mod tests {
     fn close_subscriptions_accepted_no_commitment() {
         let mut deps = default_deps(None);
         set_accepted(&mut deps.storage, vec!["sub_1"]);
+        asset_exchange_storage(&mut deps.storage)
+            .save(
+                Addr::unchecked("sub_1").as_bytes(),
+                &vec![AssetExchange {
+                    investment: Some(1_000),
+                    commitment: Some(-1_000),
+                    capital: Some(-1_000),
+                    date: None,
+                }],
+            )
+            .unwrap();
 
         // close sub as gp
         execute(
@@ -290,7 +318,13 @@ mod tests {
                 .load()
                 .unwrap()
                 .len()
-        )
+        );
+
+        // verify remove any outstanding asset exchanges
+        assert!(asset_exchange_storage_read(&deps.storage)
+            .may_load(Addr::unchecked("sub_1").as_bytes())
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -305,32 +339,17 @@ mod tests {
             .update_balance(Addr::unchecked("sub_1"), coins(100, "commitment_coin"));
 
         // close sub as gp
-        execute(
+        let res = execute(
             deps.as_mut(),
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::CloseSubscriptions {
                 subscriptions: to_addresses(vec!["sub_1"]),
             },
-        )
-        .unwrap();
-
-        // verify accepted sub remains
-        assert_eq!(
-            1,
-            accepted_subscriptions_read(&deps.storage)
-                .load()
-                .unwrap()
-                .len()
         );
-        // verify outsounding sub closure exists
-        assert_eq!(
-            1,
-            asset_exchange_storage_read(&deps.storage)
-                .load(Addr::unchecked("sub_1").as_bytes())
-                .unwrap()
-                .len()
-        )
+
+        // verify error
+        assert!(res.is_err());
     }
 
     #[test]
