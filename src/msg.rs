@@ -44,7 +44,7 @@ pub enum HandleMsg {
         cancellations: Vec<IssueAssetExchange>,
     },
     CompleteAssetExchange {
-        exchange: AssetExchange,
+        exchanges: Vec<AssetExchange>,
         to: Option<Addr>,
         memo: Option<String>,
     },

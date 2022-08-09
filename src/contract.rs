@@ -102,9 +102,11 @@ pub fn execute(
         HandleMsg::CancelAssetExchanges { cancellations } => {
             try_cancel_asset_exchanges(deps, info, cancellations)
         }
-        HandleMsg::CompleteAssetExchange { exchange, to, memo } => {
-            try_complete_asset_exchange(deps, env, info, exchange, to, memo)
-        }
+        HandleMsg::CompleteAssetExchange {
+            exchanges,
+            to,
+            memo,
+        } => try_complete_asset_exchange(deps, env, info, exchanges, to, memo),
         HandleMsg::IssueWithdrawal { to, amount, memo } => {
             let state = config(deps.storage).load()?;
 

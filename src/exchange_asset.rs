@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
     burn_marker_supply, mint_marker_supply, withdraw_coins, ProvenanceQuerier, ProvenanceQuery,
@@ -75,7 +77,7 @@ pub fn try_complete_asset_exchange(
     deps: DepsMut<ProvenanceQuery>,
     env: Env,
     info: MessageInfo,
-    exchange: AssetExchange,
+    exchanges: Vec<AssetExchange>,
     to: Option<Addr>,
     memo: Option<String>,
 ) -> ContractResponse {
@@ -86,24 +88,26 @@ pub fn try_complete_asset_exchange(
         .may_load(info.sender.as_bytes())?
         .ok_or("no asset exchange found for subscription")?;
 
-    let index = existing
-        .iter()
-        .position(|e| &exchange == e)
-        .ok_or("no asset exchange found for subcription")?;
-    existing.remove(index);
+    for exchange in &exchanges {
+        let index = existing
+            .iter()
+            .position(|e| exchange == e)
+            .ok_or("no asset exchange found for subcription")?;
+        existing.remove(index);
 
-    storage.save(info.sender.as_bytes(), &existing)?;
+        storage.save(info.sender.as_bytes(), &existing)?;
 
-    if let Some(date) = &exchange.date {
-        match date {
-            ExchangeDate::Due(epoch_seconds) => {
-                if epoch_seconds < &env.block.time.seconds() {
-                    return contract_error("exchange past due");
+        if let Some(date) = &exchange.date {
+            match date {
+                ExchangeDate::Due(epoch_seconds) => {
+                    if epoch_seconds < &env.block.time.seconds() {
+                        return contract_error("exchange past due");
+                    }
                 }
-            }
-            ExchangeDate::Available(epoch_seconds) => {
-                if epoch_seconds > &env.block.time.seconds() {
-                    return contract_error("exchange not yet available");
+                ExchangeDate::Available(epoch_seconds) => {
+                    if epoch_seconds > &env.block.time.seconds() {
+                        return contract_error("exchange not yet available");
+                    }
                 }
             }
         }
@@ -111,9 +115,10 @@ pub fn try_complete_asset_exchange(
 
     let mut response = Response::new();
 
-    if let Some(investment) = exchange.investment {
-        let abs_investment = investment.unsigned_abs();
-        if investment < 0 {
+    let total_investment: i64 = exchanges.iter().filter_map(|e| e.investment).sum();
+    let abs_investment = total_investment.unsigned_abs();
+    match total_investment.cmp(&0) {
+        Ordering::Less => {
             let investment_marker = ProvenanceQuerier::new(&deps.querier)
                 .get_marker_by_denom(state.investment_denom.clone())?;
             let deposit_investment = BankMsg::Send {
@@ -126,7 +131,8 @@ pub fn try_complete_asset_exchange(
             response = response
                 .add_message(deposit_investment)
                 .add_message(burn_investment);
-        } else {
+        }
+        Ordering::Greater => {
             let mint_investment =
                 mint_marker_supply(abs_investment.into(), state.investment_denom.clone())?;
             let withdraw_investment = withdraw_coins(
@@ -140,11 +146,16 @@ pub fn try_complete_asset_exchange(
                 .add_message(mint_investment)
                 .add_message(withdraw_investment);
         }
+        _ => {}
     }
 
-    if let Some(commitment_in_shares) = exchange.commitment_in_shares {
-        let abs_commitment = commitment_in_shares.unsigned_abs();
-        if commitment_in_shares < 0 {
+    let total_commitment: i64 = exchanges
+        .iter()
+        .filter_map(|e| e.commitment_in_shares)
+        .sum();
+    let abs_commitment = total_commitment.unsigned_abs();
+    match total_commitment.cmp(&0) {
+        Ordering::Less => {
             let deposit_commitment = BankMsg::Send {
                 to_address: ProvenanceQuerier::new(&deps.querier)
                     .get_marker_by_denom(state.commitment_denom.clone())?
@@ -158,7 +169,8 @@ pub fn try_complete_asset_exchange(
             response = response
                 .add_message(deposit_commitment)
                 .add_message(burn_commitment);
-        } else {
+        }
+        Ordering::Greater => {
             let mint_commitment =
                 mint_marker_supply(abs_commitment.into(), state.commitment_denom.clone())?;
             let withdraw_commitment = withdraw_coins(
@@ -172,18 +184,18 @@ pub fn try_complete_asset_exchange(
                 .add_message(mint_commitment)
                 .add_message(withdraw_commitment);
         }
+        _ => {}
     }
 
-    if let Some(capital) = exchange.capital {
-        let abs_capital = capital.unsigned_abs();
-        if capital > 0 {
-            let send_capital = BankMsg::Send {
-                to_address: to.unwrap_or(info.sender).into_string(),
-                amount: coins(abs_capital.into(), state.capital_denom),
-            };
+    let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
+    let abs_capital = total_capital.unsigned_abs();
+    if total_capital > 0 {
+        let send_capital = BankMsg::Send {
+            to_address: to.unwrap_or(info.sender).into_string(),
+            amount: coins(abs_capital.into(), state.capital_denom),
+        };
 
-            response = response.add_message(send_capital);
-        }
+        response = response.add_message(send_capital);
     }
 
     Ok(match memo {
@@ -397,12 +409,20 @@ pub mod tests {
             asset_exchange_storage(&mut deps.storage)
                 .save(
                     Addr::unchecked("sub_1").as_bytes(),
-                    &vec![AssetExchange {
-                        investment: Some(-1_000),
-                        commitment_in_shares: None,
-                        capital: Some(1_000),
-                        date: None,
-                    }],
+                    &vec![
+                        AssetExchange {
+                            investment: Some(-1_000),
+                            commitment_in_shares: None,
+                            capital: Some(1_000),
+                            date: None,
+                        },
+                        AssetExchange {
+                            investment: Some(-1_000),
+                            commitment_in_shares: None,
+                            capital: Some(1_000),
+                            date: None,
+                        },
+                    ],
                 )
                 .unwrap();
         }
@@ -412,12 +432,20 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &coins(1_000, "investment_coin")),
             HandleMsg::CompleteAssetExchange {
-                exchange: AssetExchange {
-                    investment: Some(-1_000),
-                    commitment_in_shares: None,
-                    capital: Some(1_000),
-                    date: None,
-                },
+                exchanges: vec![
+                    AssetExchange {
+                        investment: Some(-1_000),
+                        commitment_in_shares: None,
+                        capital: Some(1_000),
+                        date: None,
+                    },
+                    AssetExchange {
+                        investment: Some(-1_000),
+                        commitment_in_shares: None,
+                        capital: Some(1_000),
+                        date: None,
+                    },
+                ],
                 to: Some(Addr::unchecked("destination")),
                 memo: Some(String::from("note")),
             },
@@ -437,19 +465,19 @@ pub mod tests {
         let coin = coins.first().unwrap();
         assert_eq!("tp18vd8fpwxzck93qlwghaj6arh4p7c5n89x8kskz", to_address);
         assert_eq!("investment_coin", coin.denom);
-        assert_eq!(1_000, coin.amount.u128());
+        assert_eq!(2_000, coin.amount.u128());
 
         // verify burn investment
         let coin = burn_args(msg_at_index(&res, 1));
         assert_eq!("investment_coin", coin.denom);
-        assert_eq!(1_000, coin.amount.u128());
+        assert_eq!(2_000, coin.amount.u128());
 
         // verify send message
         let (to_address, coins) = send_args(msg_at_index(&res, 2));
         let coin = coins.first().unwrap();
         assert_eq!("destination", to_address);
         assert_eq!("stable_coin", coin.denom);
-        assert_eq!(1_000, coin.amount.u128());
+        assert_eq!(2_000, coin.amount.u128());
 
         // verify exchange is removed
         assert_eq!(
@@ -483,12 +511,12 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &vec![]),
             HandleMsg::CompleteAssetExchange {
-                exchange: AssetExchange {
+                exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
                     capital: Some(1_000),
                     date: None,
-                },
+                }],
                 to: Some(Addr::unchecked("destination")),
                 memo: Some(String::from("note")),
             },
@@ -522,12 +550,12 @@ pub mod tests {
             mock_env(),
             mock_info("sub_1", &coins(1_000, "investment_coin")),
             HandleMsg::CompleteAssetExchange {
-                exchange: AssetExchange {
+                exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
                     capital: Some(1_000),
                     date: None,
-                },
+                }],
                 to: Some(Addr::unchecked("destination")),
                 memo: Some(String::from("note")),
             },

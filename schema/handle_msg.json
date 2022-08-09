@@ -147,11 +147,14 @@
         "complete_asset_exchange": {
           "type": "object",
           "required": [
-            "exchange"
+            "exchanges"
           ],
           "properties": {
-            "exchange": {
-              "$ref": "#/definitions/AssetExchange"
+            "exchanges": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/AssetExchange"
+              }
             },
             "memo": {
               "type": [
