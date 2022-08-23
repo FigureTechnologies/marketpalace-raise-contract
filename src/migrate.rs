@@ -10,13 +10,17 @@ use crate::state::State;
 use crate::state::CONFIG_KEY;
 use crate::version::CONTRACT_NAME;
 use crate::version::CONTRACT_VERSION;
+use cosmwasm_std::coins;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::Addr;
+use cosmwasm_std::BankMsg;
 use cosmwasm_std::DepsMut;
 use cosmwasm_std::Env;
 use cosmwasm_std::Response;
 use cosmwasm_storage::singleton_read;
 use cw2::set_contract_version;
+use provwasm_std::burn_marker_supply;
+use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,7 +29,7 @@ use serde::Serialize;
 struct EmptyArgs {}
 
 #[entry_point]
-pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> ContractResponse {
+pub fn migrate(deps: DepsMut<ProvenanceQuery>, env: Env, msg: MigrateMsg) -> ContractResponse {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let old_state: StateV1_0_1 = singleton_read(deps.storage, CONFIG_KEY).load()?;
@@ -53,7 +57,51 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, msg: MigrateMsg) -> Contr
     pending_subscriptions(deps.storage).save(&new_pending_subscriptions)?;
     accepted_subscriptions(deps.storage).save(&new_accepted_subscriptions)?;
 
-    Ok(Response::default())
+    let mut response = Response::default();
+
+    let remaining_commitment = deps
+        .querier
+        .query_balance(
+            env.contract.address.as_str(),
+            new_state.commitment_denom.clone(),
+        )
+        .map(|coin| coin.amount.u128())?;
+    if remaining_commitment > 0 {
+        let deposit_commitment = BankMsg::Send {
+            to_address: ProvenanceQuerier::new(&deps.querier)
+                .get_marker_by_denom(new_state.commitment_denom.clone())?
+                .address
+                .into_string(),
+            amount: coins(remaining_commitment, new_state.commitment_denom.clone()),
+        };
+        let burn_commitment = burn_marker_supply(remaining_commitment, new_state.commitment_denom)?;
+        response = response
+            .add_message(deposit_commitment)
+            .add_message(burn_commitment);
+    }
+
+    let remaining_investment = deps
+        .querier
+        .query_balance(
+            env.contract.address.as_str(),
+            new_state.investment_denom.clone(),
+        )
+        .map(|coin| coin.amount.u128())?;
+    if remaining_investment > 0 {
+        let deposit_investment = BankMsg::Send {
+            to_address: ProvenanceQuerier::new(&deps.querier)
+                .get_marker_by_denom(new_state.investment_denom.clone())?
+                .address
+                .into_string(),
+            amount: coins(remaining_investment, new_state.investment_denom.clone()),
+        };
+        let burn_investment = burn_marker_supply(remaining_investment, new_state.investment_denom)?;
+        response = response
+            .add_message(deposit_investment)
+            .add_message(burn_investment);
+    }
+
+    Ok(response)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -73,17 +121,22 @@ struct StateV1_0_1 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::tests::default_deps;
+    use crate::mock::{burn_args, load_markers, msg_at_index, send_args};
     use crate::msg::{AssetExchange, IssueAssetExchange};
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::{accepted_subscriptions_read, pending_subscriptions_read};
     use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::Addr;
+    use cosmwasm_std::{coin, Addr};
     use cosmwasm_storage::{singleton, singleton_read};
+    use provwasm_mocks::mock_dependencies;
 
     #[test]
     fn migration() {
-        let mut deps = default_deps(None);
+        let mut deps = mock_dependencies(&vec![
+            coin(5_000, "commitment_coin"),
+            coin(10_000, "investment_coin"),
+        ]);
+        load_markers(&mut deps.querier);
         singleton(&mut deps.storage, CONFIG_KEY)
             .save(&StateV1_0_1 {
                 recovery_admin: Addr::unchecked("marketpalace"),
@@ -99,7 +152,7 @@ mod tests {
             })
             .unwrap();
 
-        migrate(
+        let res = migrate(
             deps.as_mut(),
             mock_env(),
             MigrateMsg {
@@ -117,6 +170,7 @@ mod tests {
         )
         .unwrap();
 
+        // verify new state
         assert_eq!(
             State {
                 subscription_code_id: 1,
@@ -130,6 +184,8 @@ mod tests {
             },
             singleton_read(&deps.storage, CONFIG_KEY).load().unwrap()
         );
+
+        // verify migrated subs
         assert_eq!(
             1,
             pending_subscriptions_read(&deps.storage)
@@ -144,6 +200,8 @@ mod tests {
                 .unwrap()
                 .len()
         );
+
+        // verify migrated active cap calls
         assert_eq!(
             1,
             asset_exchange_storage_read(&deps.storage)
@@ -151,5 +209,32 @@ mod tests {
                 .unwrap()
                 .len()
         );
+
+        // verify send and burn messages
+        assert_eq!(4, res.messages.len());
+
+        // verify deposit commitment
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        let coin = coins.first().unwrap();
+        assert_eq!("tp18vmzryrvwaeykmdtu6cfrz5sau3dhc5c73ms0u", to_address);
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(5_000, coin.amount.u128());
+
+        // verify burn commitment
+        let coin = burn_args(msg_at_index(&res, 1));
+        assert_eq!("commitment_coin", coin.denom);
+        assert_eq!(5_000, coin.amount.u128());
+
+        // verify deposit investment
+        let (to_address, coins) = send_args(msg_at_index(&res, 2));
+        let coin = coins.first().unwrap();
+        assert_eq!("tp18vd8fpwxzck93qlwghaj6arh4p7c5n89x8kskz", to_address);
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!(10_000, coin.amount.u128());
+
+        // verify burn investment
+        let coin = burn_args(msg_at_index(&res, 3));
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!(10_000, coin.amount.u128());
     }
 }
