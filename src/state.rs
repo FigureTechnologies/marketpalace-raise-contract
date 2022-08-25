@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 use cosmwasm_std::{Addr, Storage};
-use cosmwasm_storage::{bucket, singleton, singleton_read, Bucket, ReadonlySingleton, Singleton};
+use cosmwasm_storage::{
+    bucket, bucket_read, singleton, singleton_read, Bucket, ReadonlyBucket, ReadonlySingleton,
+    Singleton,
+};
 
 use crate::msg::AssetExchange;
 
@@ -46,6 +49,10 @@ pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
 
 pub fn asset_exchange_storage(storage: &mut dyn Storage) -> Bucket<Vec<AssetExchange>> {
     bucket(storage, ASSET_EXCHANGE_NAMESPACE)
+}
+
+pub fn asset_exchange_storage_read(storage: &dyn Storage) -> ReadonlyBucket<Vec<AssetExchange>> {
+    bucket_read(storage, ASSET_EXCHANGE_NAMESPACE)
 }
 
 pub fn pending_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
