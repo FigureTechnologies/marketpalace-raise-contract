@@ -120,6 +120,12 @@ pub mod tests {
             .unwrap();
     }
 
+    pub fn set_eligible(storage: &mut dyn Storage, addresses: Vec<&str>) {
+        eligible_subscriptions(storage)
+            .save(&to_addresses(addresses))
+            .unwrap();
+    }
+
     pub fn set_accepted(storage: &mut dyn Storage, addresses: Vec<&str>) {
         accepted_subscriptions(storage)
             .save(&to_addresses(addresses))
