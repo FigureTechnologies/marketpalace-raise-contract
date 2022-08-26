@@ -1,13 +1,13 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::{AcceptSubscription, AssetExchange};
-use crate::state::asset_exchange_storage;
 use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
+use crate::state::{asset_exchange_storage, eligible_subscriptions};
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg, SubState};
-use cosmwasm_std::DepsMut;
 use cosmwasm_std::MessageInfo;
 use cosmwasm_std::Response;
 use cosmwasm_std::{to_binary, Addr, Env, SubMsg, WasmMsg};
+use cosmwasm_std::{Deps, DepsMut};
 use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
 use std::collections::HashSet;
@@ -20,6 +20,17 @@ pub fn try_propose_subscription(
     initial_commitment: Option<u64>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
+
+    let eligible = if state.acceptable_accreditations.is_empty() {
+        true
+    } else {
+        let attributes = attributes(deps.as_ref(), &info.sender);
+
+        attributes
+            .intersection(&state.acceptable_accreditations)
+            .count()
+            > 0
+    };
 
     let create_sub = SubMsg::reply_always(
         WasmMsg::Instantiate {
@@ -37,10 +48,20 @@ pub fn try_propose_subscription(
             funds: vec![],
             label: String::from("establish subscription"),
         },
-        1,
+        if eligible { 1 } else { 0 },
     );
 
     Ok(Response::new().add_submessage(create_sub))
+}
+
+fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
+    ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(lp.clone(), None as Option<String>)
+        .unwrap()
+        .attributes
+        .into_iter()
+        .map(|attribute| attribute.name)
+        .collect()
 }
 
 pub fn try_close_subscriptions(
@@ -52,6 +73,9 @@ pub fn try_close_subscriptions(
     let mut pending = pending_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
+    let mut eligible = eligible_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
     let mut accepted = accepted_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -61,7 +85,7 @@ pub fn try_close_subscriptions(
     }
 
     for subscription in subscriptions {
-        if !pending.remove(&subscription) {
+        if !pending.remove(&subscription) && !eligible.remove(&subscription) {
             if accepted.contains(&subscription) {
                 let remaining_commitment = deps
                     .querier
@@ -80,6 +104,7 @@ pub fn try_close_subscriptions(
     }
 
     pending_subscriptions(deps.storage).save(&pending)?;
+    eligible_subscriptions(deps.storage).save(&eligible)?;
     accepted_subscriptions(deps.storage).save(&accepted)?;
 
     Ok(Response::new())
@@ -94,6 +119,9 @@ pub fn try_accept_subscriptions(
     let mut pending = pending_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
+    let mut eligible = eligible_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
     let mut accepted = accepted_subscriptions(deps.storage)
         .may_load()?
         .unwrap_or_default();
@@ -103,34 +131,34 @@ pub fn try_accept_subscriptions(
     }
 
     for accept in accepts.iter() {
-        let sub_state: SubState = deps
-            .querier
-            .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetState {})?;
-
-        let attributes: HashSet<String> = ProvenanceQuerier::new(&deps.querier)
-            .get_attributes(sub_state.lp.clone(), None as Option<String>)
-            .unwrap()
-            .attributes
-            .into_iter()
-            .map(|attribute| attribute.name)
-            .collect();
-
-        if !state.acceptable_accreditations.is_empty()
-            && attributes
-                .intersection(&state.acceptable_accreditations)
-                .count()
-                == 0
-        {
-            return contract_error("subscription owner must have one of acceptable accreditations");
-        }
-
         if state.not_evenly_divisble(accept.commitment_in_capital) {
             return contract_error("accept amount must be evenly divisble by capital per share");
         }
-    }
 
-    for accept in accepts {
-        pending.remove(&accept.subscription);
+        if eligible.contains(&accept.subscription) {
+            eligible.remove(&accept.subscription);
+        } else if pending.contains(&accept.subscription) {
+            if !state.acceptable_accreditations.is_empty() {
+                let sub_state: SubState = deps
+                    .querier
+                    .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetState {})?;
+
+                let attributes: HashSet<String> = attributes(deps.as_ref(), &sub_state.lp);
+
+                if attributes
+                    .intersection(&state.acceptable_accreditations)
+                    .count()
+                    == 0
+                {
+                    return contract_error(
+                        "subscription owner must have one of acceptable accreditations",
+                    );
+                }
+            }
+
+            pending.remove(&accept.subscription);
+        }
+
         accepted.insert(accept.subscription.clone());
         asset_exchange_storage(deps.storage).save(
             accept.subscription.as_bytes(),
@@ -146,7 +174,9 @@ pub fn try_accept_subscriptions(
             }],
         )?;
     }
+
     pending_subscriptions(deps.storage).save(&pending)?;
+    eligible_subscriptions(deps.storage).save(&eligible)?;
     accepted_subscriptions(deps.storage).save(&accepted)?;
 
     Ok(Response::default())
@@ -155,8 +185,8 @@ pub fn try_accept_subscriptions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::execute;
     use crate::contract::tests::default_deps;
-    use crate::contract::{execute, reply};
     use crate::mock::{
         instantiate_args, msg_at_index, wasm_smart_mock_dependencies, MockContractQuerier,
     };
@@ -171,6 +201,7 @@ mod tests {
     use crate::state::tests::to_addresses;
     use crate::state::tests::{asset_exchange_storage_read, set_accepted};
     use crate::state::State;
+    use cosmwasm_std::coins;
     use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::mock_env;
     use cosmwasm_std::testing::mock_info;
@@ -181,7 +212,6 @@ mod tests {
     use cosmwasm_std::MemoryStorage;
     use cosmwasm_std::OwnedDeps;
     use cosmwasm_std::SystemResult;
-    use cosmwasm_std::{coins, Event, Reply, SubMsgResponse};
 
     pub fn mock_sub_state(
     ) -> OwnedDeps<MemoryStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
@@ -202,7 +232,6 @@ mod tests {
     }
 
     #[test]
-
     fn propose_subscription() {
         let mut deps = default_deps(None);
 
@@ -237,33 +266,6 @@ mod tests {
         );
         assert_eq!(0, funds.len());
         assert_eq!("establish subscription", label);
-
-        reply(
-            deps.as_mut(),
-            mock_env(),
-            Reply {
-                id: 1,
-                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
-                    events: vec![
-                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
-                    ],
-                    data: None,
-                }),
-            },
-        )
-        .unwrap();
-
-        // verify pending sub saved
-        assert_eq!(
-            "sub_1",
-            pending_subscriptions_read(&deps.storage)
-                .load()
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap()
-                .as_str()
-        );
     }
 
     #[test]
@@ -399,6 +401,7 @@ mod tests {
     #[test]
     fn accept_subscription() {
         let mut deps = mock_sub_state();
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
         config(&mut deps.storage)
             .save(&State::test_default())
             .unwrap();

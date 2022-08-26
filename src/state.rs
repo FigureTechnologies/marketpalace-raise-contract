@@ -15,6 +15,7 @@ pub static CONFIG_KEY: &[u8] = b"config";
 pub static ASSET_EXCHANGE_NAMESPACE: &[u8] = b"asset_exchange";
 
 pub static PENDING_SUBSCRIPTIONS_KEY: &[u8] = b"pending_subscriptions";
+pub static ELIGIBLE_SUBSCRIPTIONS_KEY: &[u8] = b"eligible_subscriptions";
 pub static ACCEPTED_SUBSCRIPTIONS_KEY: &[u8] = b"accepted_subscriptions";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -63,6 +64,14 @@ pub fn pending_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<Ha
     singleton_read(storage, PENDING_SUBSCRIPTIONS_KEY)
 }
 
+pub fn eligible_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
+    singleton(storage, ELIGIBLE_SUBSCRIPTIONS_KEY)
+}
+
+pub fn eligible_subscriptions_read(storage: &dyn Storage) -> ReadonlySingleton<HashSet<Addr>> {
+    singleton_read(storage, ELIGIBLE_SUBSCRIPTIONS_KEY)
+}
+
 pub fn accepted_subscriptions(storage: &mut dyn Storage) -> Singleton<HashSet<Addr>> {
     singleton(storage, ACCEPTED_SUBSCRIPTIONS_KEY)
 }
@@ -83,7 +92,7 @@ pub mod tests {
                 subscription_code_id: 100,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
-                acceptable_accreditations: HashSet::new(),
+                acceptable_accreditations: vec![String::from("506c")].into_iter().collect(),
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),

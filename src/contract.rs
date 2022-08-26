@@ -2,8 +2,8 @@ use crate::error::contract_error;
 use crate::exchange_asset::try_cancel_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
+use crate::state::eligible_subscriptions;
 use crate::state::pending_subscriptions;
-use crate::state::pending_subscriptions_read;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
@@ -28,11 +28,15 @@ pub fn reply(deps: DepsMut<ProvenanceQuery>, _env: Env, msg: Reply) -> ContractR
     // look for a contract address from instantiating subscription contract
     if let SubMsgResult::Ok(response) = msg.result {
         if let Some(contract_address) = contract_address(&response.events) {
-            let mut pending = pending_subscriptions_read(deps.storage)
-                .may_load()?
-                .unwrap_or_default();
-            pending.insert(contract_address);
-            pending_subscriptions(deps.storage).save(&pending)?;
+            let eligible = msg.id == 1;
+            let mut storage = if eligible {
+                eligible_subscriptions(deps.storage)
+            } else {
+                pending_subscriptions(deps.storage)
+            };
+            let mut subscriptions = storage.may_load()?.unwrap_or_default();
+            subscriptions.insert(contract_address);
+            storage.save(&subscriptions)?;
         } else {
             return contract_error("no contract address found");
         }
@@ -140,8 +144,11 @@ pub mod tests {
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
     use crate::state::config_read;
+    use crate::state::eligible_subscriptions_read;
+    use crate::state::pending_subscriptions_read;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
+    use cosmwasm_std::SubMsgResponse;
     use cosmwasm_std::{Addr, OwnedDeps};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
@@ -157,6 +164,70 @@ pub mod tests {
         config(&mut deps.storage).save(&state).unwrap();
 
         deps
+    }
+
+    #[test]
+    fn reply_pending() {
+        let mut deps = default_deps(None);
+
+        reply(
+            deps.as_mut(),
+            mock_env(),
+            Reply {
+                id: 0,
+                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
+                    events: vec![
+                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
+                    ],
+                    data: None,
+                }),
+            },
+        )
+        .unwrap();
+
+        // verify pending sub saved
+        assert_eq!(
+            "sub_1",
+            pending_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str()
+        );
+    }
+
+    #[test]
+    fn reply_eligible() {
+        let mut deps = default_deps(None);
+
+        reply(
+            deps.as_mut(),
+            mock_env(),
+            Reply {
+                id: 1,
+                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
+                    events: vec![
+                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
+                    ],
+                    data: None,
+                }),
+            },
+        )
+        .unwrap();
+
+        // verify pending sub saved
+        assert_eq!(
+            "sub_1",
+            eligible_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str()
+        );
     }
 
     #[test]

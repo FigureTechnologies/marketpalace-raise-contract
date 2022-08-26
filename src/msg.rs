@@ -109,5 +109,6 @@ pub enum QueryMsg {
 pub struct RaiseState {
     pub general: State,
     pub pending_subscriptions: HashSet<Addr>,
+    pub eligible_subscriptions: HashSet<Addr>,
     pub accepted_subscriptions: HashSet<Addr>,
 }

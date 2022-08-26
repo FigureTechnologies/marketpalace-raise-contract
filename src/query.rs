@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::msg::{AssetExchange, QueryMsg, RaiseState};
 use crate::state::{
     accepted_subscriptions_read, asset_exchange_storage_read, config_read,
-    pending_subscriptions_read,
+    eligible_subscriptions_read, pending_subscriptions_read,
 };
 
 #[entry_point]
@@ -15,6 +15,9 @@ pub fn query(deps: Deps<ProvenanceQuery>, _env: Env, msg: QueryMsg) -> StdResult
         QueryMsg::GetState {} => to_binary(&RaiseState {
             general: config_read(deps.storage).load()?,
             pending_subscriptions: pending_subscriptions_read(deps.storage)
+                .may_load()?
+                .unwrap_or_default(),
+            eligible_subscriptions: eligible_subscriptions_read(deps.storage)
                 .may_load()?
                 .unwrap_or_default(),
             accepted_subscriptions: accepted_subscriptions_read(deps.storage)
