@@ -1,30 +1,108 @@
-use cosmwasm_std::{entry_point, to_binary, Binary, Deps, Env, StdResult};
+use cosmwasm_std::{entry_point, to_binary, Addr, Binary, Deps, Env, StdResult};
+use provwasm_std::ProvenanceQuery;
+use schemars::JsonSchema;
+use serde::Serialize;
 
-use crate::msg::{QueryMsg, Subs, Terms, Transactions};
-use crate::state::config_read;
+use crate::msg::{AssetExchange, QueryMsg, RaiseState};
+use crate::state::{
+    accepted_subscriptions_read, asset_exchange_storage_read, config_read,
+    eligible_subscriptions_read, pending_subscriptions_read,
+};
 
 #[entry_point]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    let state = config_read(deps.storage).load()?;
-
+pub fn query(deps: Deps<ProvenanceQuery>, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetStatus {} => to_binary(&state.status),
-        QueryMsg::GetTerms {} => to_binary(&Terms {
-            acceptable_accreditations: state.acceptable_accreditations,
-            other_required_tags: state.other_required_tags,
-            commitment_denom: state.commitment_denom,
-            investment_denom: state.investment_denom,
-            capital_denom: state.capital_denom,
-            capital_per_share: state.capital_per_share,
-            min_commitment: state.min_commitment,
-            max_commitment: state.max_commitment,
+        QueryMsg::GetState {} => to_binary(&RaiseState {
+            general: config_read(deps.storage).load()?,
+            pending_subscriptions: pending_subscriptions_read(deps.storage)
+                .may_load()?
+                .unwrap_or_default(),
+            eligible_subscriptions: eligible_subscriptions_read(deps.storage)
+                .may_load()?
+                .unwrap_or_default(),
+            accepted_subscriptions: accepted_subscriptions_read(deps.storage)
+                .may_load()?
+                .unwrap_or_default(),
         }),
-        QueryMsg::GetSubs {} => to_binary(&Subs {
-            pending_review: state.pending_review_subs,
-            accepted: state.accepted_subs,
-        }),
-        QueryMsg::GetTransactions {} => to_binary(&Transactions {
-            withdrawals: state.issued_withdrawals,
-        }),
+        QueryMsg::GetAllAssetExchanges {} => {
+            let all_asset_exchanges: Vec<SubscriptionAssetExchanges> =
+                accepted_subscriptions_read(deps.storage)
+                    .may_load()?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|subscription| SubscriptionAssetExchanges {
+                        subscription: subscription.clone(),
+                        exchanges: asset_exchange_storage_read(deps.storage)
+                            .may_load(subscription.as_bytes())
+                            .unwrap()
+                            .unwrap_or_default(),
+                    })
+                    .collect();
+
+            to_binary(&all_asset_exchanges)
+        }
+        QueryMsg::GetAssetExchangesForSubscription { subscription } => {
+            to_binary(&asset_exchange_storage_read(deps.storage).may_load(subscription.as_bytes())?)
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+struct SubscriptionAssetExchanges {
+    #[serde(rename = "sub")]
+    subscription: Addr,
+    exchanges: Vec<AssetExchange>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{
+        query::query,
+        state::{asset_exchange_storage, tests::set_accepted},
+    };
+    use cosmwasm_std::testing::mock_env;
+    use provwasm_mocks::mock_dependencies;
+
+    #[test]
+    fn get_all_asset_exchanges() {
+        let mut deps = mock_dependencies(&[]);
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
+        {
+            asset_exchange_storage(&mut deps.storage)
+                .save(
+                    Addr::unchecked("sub_1").as_bytes(),
+                    &vec![AssetExchange {
+                        investment: None,
+                        commitment_in_shares: Some(1_000),
+                        capital: None,
+                        date: None,
+                    }],
+                )
+                .unwrap();
+        }
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAllAssetExchanges {}).unwrap();
+        println!("{}", std::str::from_utf8(res.as_slice()).unwrap());
+    }
+
+    #[test]
+    fn get_asset_exchanges_for_subscription() {
+        let mut deps = mock_dependencies(&[]);
+        asset_exchange_storage(&mut deps.storage)
+            .save(
+                Addr::unchecked("sub_1").as_bytes(),
+                &vec![AssetExchange {
+                    investment: None,
+                    commitment_in_shares: Some(1_000),
+                    capital: None,
+                    date: None,
+                }],
+            )
+            .unwrap();
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAllAssetExchanges {}).unwrap();
+        println!("{}", std::str::from_utf8(res.as_slice()).unwrap());
     }
 }

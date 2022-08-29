@@ -1,18 +1,20 @@
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
-use cosmwasm_std::Addr;
 use cosmwasm_std::BankMsg;
 use cosmwasm_std::CosmosMsg;
 use cosmwasm_std::Response;
 use cosmwasm_std::WasmMsg;
+use cosmwasm_std::{from_binary, Addr};
 use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
 };
-use provwasm_std::MarkerMsgParams;
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceMsgParams;
+use provwasm_std::{Marker, MarkerMsgParams};
+use serde::de::DeserializeOwned;
+use std::marker::PhantomData;
 
-use provwasm_mocks::ProvenanceMockQuerier;
+use provwasm_mocks::{must_read_binary_file, ProvenanceMockQuerier};
 use provwasm_std::ProvenanceQuery;
 
 pub type MockWasmSmartHandler = fn(String, Binary) -> SystemResult<ContractResult<Binary>>;
@@ -46,7 +48,7 @@ impl Querier for MockContractQuerier {
 pub fn wasm_smart_mock_dependencies(
     contract_balance: &[Coin],
     wasm_smart_handler: MockWasmSmartHandler,
-) -> OwnedDeps<MockStorage, MockApi, MockContractQuerier> {
+) -> OwnedDeps<MockStorage, MockApi, MockContractQuerier, ProvenanceQuery> {
     let base =
         ProvenanceMockQuerier::new(MockQuerier::new(&[(MOCK_CONTRACT_ADDR, contract_balance)]));
 
@@ -57,6 +59,7 @@ pub fn wasm_smart_mock_dependencies(
             base,
             wasm_smart_handler,
         },
+        custom_query_type: PhantomData,
     }
 }
 
@@ -69,6 +72,14 @@ pub fn bank_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &BankMsg {
         msg
     } else {
         panic!("not a cosmos bank message!")
+    }
+}
+
+pub fn send_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Vec<Coin>) {
+    if let BankMsg::Send { to_address, amount } = bank_msg(msg) {
+        (to_address, amount)
+    } else {
+        panic!("not a send bank message!")
     }
 }
 
@@ -105,6 +116,14 @@ pub fn withdraw_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Coin, &Addr) 
     }
 }
 
+pub fn burn_args(msg: &CosmosMsg<ProvenanceMsg>) -> &Coin {
+    if let MarkerMsgParams::BurnMarkerSupply { coin } = marker_msg(msg) {
+        coin
+    } else {
+        panic!("not a mint burn message!")
+    }
+}
+
 pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
     if let CosmosMsg::Wasm(msg) = msg {
         msg
@@ -113,15 +132,43 @@ pub fn wasm_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &WasmMsg {
     }
 }
 
-pub fn execute_args(msg: &CosmosMsg<ProvenanceMsg>) -> (&String, &Binary, &Vec<Coin>) {
+pub fn instantiate_args<T: DeserializeOwned>(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> (&Option<String>, &u64, T, &Vec<Coin>, &String) {
+    if let WasmMsg::Instantiate {
+        admin,
+        code_id,
+        msg,
+        funds,
+        label,
+    } = wasm_msg(msg)
+    {
+        (admin, code_id, from_binary::<T>(msg).unwrap(), funds, label)
+    } else {
+        panic!("not a wasm execute message")
+    }
+}
+
+pub fn execute_args<T: DeserializeOwned>(
+    msg: &CosmosMsg<ProvenanceMsg>,
+) -> (&String, T, &Vec<Coin>) {
     if let WasmMsg::Execute {
         contract_addr,
         msg,
         funds,
     } = wasm_msg(msg)
     {
-        (contract_addr, msg, funds)
+        (contract_addr, from_binary::<T>(msg).unwrap(), funds)
     } else {
         panic!("not a wasm execute message")
     }
+}
+
+pub fn load_markers(querier: &mut ProvenanceMockQuerier) {
+    let get_marker = |name: &str| -> Marker {
+        let bin = must_read_binary_file(&format!("testdata/{}_marker.json", name));
+        from_binary(&bin).unwrap()
+    };
+
+    querier.with_markers(vec![get_marker("commitment"), get_marker("investment")]);
 }

@@ -1,32 +1,42 @@
-use crate::call::try_close_calls;
-use crate::call::try_issue_calls;
 use crate::error::contract_error;
-use crate::recover::try_recover;
+use crate::exchange_asset::try_cancel_asset_exchanges;
+use crate::exchange_asset::try_complete_asset_exchange;
+use crate::exchange_asset::try_issue_asset_exchanges;
+use crate::state::eligible_subscriptions;
+use crate::state::pending_subscriptions;
 use crate::subscribe::try_accept_subscriptions;
+use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
+use cosmwasm_std::to_binary;
+use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{
-    coins, entry_point, wasm_execute, Addr, Attribute, BankMsg, ContractResult, CosmosMsg, DepsMut,
-    Env, Event, MessageInfo, Reply, Response,
+    coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
+    Response, SubMsgResult,
 };
 use provwasm_std::ProvenanceMsg;
-use std::collections::HashSet;
+use provwasm_std::ProvenanceQuery;
+use serde::Serialize;
 
 use crate::error::ContractError;
-use crate::msg::{Distribution, HandleMsg, Redemption};
-use crate::state::{config, config_read, Withdrawal};
-use crate::sub_msg::SubExecuteMsg;
+use crate::msg::HandleMsg;
+use crate::state::config;
 
 pub type ContractResponse = Result<Response<ProvenanceMsg>, ContractError>;
 
 #[entry_point]
-pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+pub fn reply(deps: DepsMut<ProvenanceQuery>, _env: Env, msg: Reply) -> ContractResponse {
     // look for a contract address from instantiating subscription contract
-    if let ContractResult::Ok(response) = msg.result {
+    if let SubMsgResult::Ok(response) = msg.result {
         if let Some(contract_address) = contract_address(&response.events) {
-            config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-                state.pending_review_subs.insert(contract_address);
-                Ok(state)
-            })?;
+            let eligible = msg.id == 1;
+            let mut storage = if eligible {
+                eligible_subscriptions(deps.storage)
+            } else {
+                pending_subscriptions(deps.storage)
+            };
+            let mut subscriptions = storage.may_load()?.unwrap_or_default();
+            subscriptions.insert(contract_address);
+            storage.save(&subscriptions)?;
         } else {
             return contract_error("no contract address found");
         }
@@ -47,183 +57,104 @@ fn contract_address(events: &[Event]) -> Option<Addr> {
     })
 }
 
+#[derive(Serialize)]
+struct EmptyArgs {}
+
 #[entry_point]
-pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: HandleMsg) -> ContractResponse {
-    match msg {
-        HandleMsg::Recover { gp } => try_recover(deps, info, gp),
-        HandleMsg::ProposeSubscription {
-            min_commitment,
-            max_commitment,
-            min_days_of_notice,
-        } => try_propose_subscription(
-            deps,
-            env,
-            info,
-            min_commitment,
-            max_commitment,
-            min_days_of_notice,
-        ),
-        HandleMsg::AcceptSubscriptions { subscriptions } => {
-            try_accept_subscriptions(deps, env, info, subscriptions)
-        }
-        HandleMsg::IssueCapitalCalls { calls } => try_issue_calls(deps, info, calls),
-        HandleMsg::CloseCapitalCalls {
-            calls,
-            is_retroactive,
-        } => try_close_calls(deps, env, info, calls, is_retroactive),
-        HandleMsg::IssueRedemptions {
-            redemptions,
-            is_retroactive,
-        } => try_issue_redemptions(deps, info, redemptions, is_retroactive),
-        HandleMsg::IssueDistributions {
-            distributions,
-            is_retroactive,
-        } => try_issue_distributions(deps, info, distributions, is_retroactive),
-        HandleMsg::IssueWithdrawal { to, amount, memo } => {
-            try_issue_withdrawal(deps, info, env, to, amount, memo)
-        }
-    }
-}
-
-pub fn try_issue_redemptions(
-    deps: DepsMut,
-    info: MessageInfo,
-    redemptions: HashSet<Redemption>,
-    is_retroactive: bool,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can issue redemptions");
-    }
-
-    let redemptions: Vec<CosmosMsg<ProvenanceMsg>> = redemptions
-        .into_iter()
-        .map(|redemption| {
-            CosmosMsg::Wasm(
-                wasm_execute(
-                    redemption.subscription,
-                    &SubExecuteMsg::IssueRedemption {
-                        redemption: redemption.asset,
-                        payment: redemption.capital,
-                        is_retroactive,
-                    },
-                    if is_retroactive {
-                        vec![]
-                    } else {
-                        coins(redemption.capital as u128, state.capital_denom.clone())
-                    },
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(redemptions))
-}
-
-pub fn try_issue_distributions(
-    deps: DepsMut,
-    info: MessageInfo,
-    distributions: HashSet<Distribution>,
-    is_retroactive: bool,
-) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
-
-    if info.sender != state.gp {
-        return contract_error("only gp can issue distributions");
-    }
-
-    let distributions: Vec<CosmosMsg<ProvenanceMsg>> = distributions
-        .into_iter()
-        .map(|distribution| {
-            CosmosMsg::Wasm(
-                wasm_execute(
-                    distribution.subscription,
-                    &SubExecuteMsg::IssueDistribution {
-                        payment: distribution.amount,
-                        is_retroactive,
-                    },
-                    if is_retroactive {
-                        vec![]
-                    } else {
-                        coins(distribution.amount as u128, state.capital_denom.clone())
-                    },
-                )
-                .unwrap(),
-            )
-        })
-        .collect();
-
-    Ok(Response::new().add_messages(distributions))
-}
-
-pub fn try_issue_withdrawal(
-    deps: DepsMut,
-    info: MessageInfo,
+pub fn execute(
+    deps: DepsMut<ProvenanceQuery>,
     env: Env,
-    to: Addr,
-    amount: u64,
-    memo: Option<String>,
+    info: MessageInfo,
+    msg: HandleMsg,
 ) -> ContractResponse {
-    let state = config_read(deps.storage).load()?;
+    match msg {
+        HandleMsg::Recover { gp } => {
+            let mut state = config(deps.storage).load()?;
 
-    if info.sender != state.gp {
-        return contract_error("only gp can redeem capital");
-    }
+            if info.sender != state.recovery_admin {
+                return contract_error("only admin can recover raise");
+            }
 
-    config(deps.storage).update(|mut state| -> Result<_, ContractError> {
-        state.sequence += 1;
-        state.issued_withdrawals.insert(Withdrawal {
-            sequence: state.sequence,
-            to: to.clone(),
-            amount,
-        });
-        Ok(state)
-    })?;
+            state.gp = gp;
+            config(deps.storage).save(&state)?;
 
-    let state = config_read(deps.storage).load()?;
-
-    let send = BankMsg::Send {
-        to_address: to.to_string(),
-        amount: coins(amount as u128, state.capital_denom),
-    };
-
-    let sequence_attribute = Attribute {
-        key: format!("{}.withdrawal.sequence", env.contract.address),
-        value: format!("{}", state.sequence),
-    };
-
-    let attributes = match memo {
-        Some(memo) => {
-            vec![
-                Attribute {
-                    key: String::from("memo"),
-                    value: memo,
-                },
-                sequence_attribute,
-            ]
+            Ok(Response::default())
         }
-        None => vec![sequence_attribute],
-    };
+        HandleMsg::MigrateSubscriptions { subscriptions } => {
+            let state = config(deps.storage).load()?;
 
-    Ok(Response::new().add_message(send).add_attributes(attributes))
+            Ok(
+                Response::new().add_messages(subscriptions.iter().map(|sub| WasmMsg::Migrate {
+                    contract_addr: sub.to_string(),
+                    new_code_id: state.subscription_code_id,
+                    msg: to_binary(&EmptyArgs {}).unwrap(),
+                })),
+            )
+        }
+        HandleMsg::ProposeSubscription { initial_commitment } => {
+            try_propose_subscription(deps, env, info, initial_commitment)
+        }
+        HandleMsg::CloseSubscriptions { subscriptions } => {
+            try_close_subscriptions(deps, info, subscriptions)
+        }
+        HandleMsg::AcceptSubscriptions { subscriptions } => {
+            try_accept_subscriptions(deps, info, subscriptions)
+        }
+        HandleMsg::IssueAssetExchanges { asset_exchanges } => {
+            try_issue_asset_exchanges(deps, info, asset_exchanges)
+        }
+        HandleMsg::CancelAssetExchanges { cancellations } => {
+            try_cancel_asset_exchanges(deps, info, cancellations)
+        }
+        HandleMsg::CompleteAssetExchange {
+            exchanges,
+            to,
+            memo,
+        } => try_complete_asset_exchange(deps, env, info, exchanges, to, memo),
+        HandleMsg::IssueWithdrawal { to, amount, memo } => {
+            let state = config(deps.storage).load()?;
+
+            if info.sender != state.gp {
+                return contract_error("only gp can redeem capital");
+            }
+
+            let send = BankMsg::Send {
+                to_address: to.to_string(),
+                amount: coins(amount as u128, state.capital_denom),
+            };
+
+            let attributes = match memo {
+                Some(memo) => {
+                    vec![Attribute {
+                        key: String::from("memo"),
+                        value: memo,
+                    }]
+                }
+                None => vec![],
+            };
+
+            Ok(Response::new().add_message(send).add_attributes(attributes))
+        }
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::mock::bank_msg;
-    use crate::mock::execute_args;
     use crate::mock::msg_at_index;
+    use crate::mock::send_args;
+    use crate::state::config_read;
+    use crate::state::eligible_subscriptions_read;
+    use crate::state::pending_subscriptions_read;
     use crate::state::State;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage};
+    use cosmwasm_std::SubMsgResponse;
     use cosmwasm_std::{Addr, OwnedDeps};
     use provwasm_mocks::{mock_dependencies, ProvenanceMockQuerier};
 
     pub fn default_deps(
         update_state: Option<fn(&mut State)>,
-    ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier> {
+    ) -> OwnedDeps<MockStorage, MockApi, ProvenanceMockQuerier, ProvenanceQuery> {
         let mut deps = mock_dependencies(&[]);
 
         let mut state = State::test_default();
@@ -236,152 +167,105 @@ pub mod tests {
     }
 
     #[test]
-    fn issue_redemptions() {
+    fn reply_pending() {
         let mut deps = default_deps(None);
 
-        let res = execute(
+        reply(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueRedemptions {
-                redemptions: vec![Redemption {
-                    subscription: Addr::unchecked("sub_1"),
-                    asset: 10_000,
-                    capital: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
+            Reply {
+                id: 0,
+                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
+                    events: vec![
+                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
+                    ],
+                    data: None,
+                }),
             },
         )
         .unwrap();
 
-        // verify execute message sent
-        assert_eq!(1, res.messages.len());
-        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
-        assert_eq!(1, funds.len());
+        // verify pending sub saved
+        assert_eq!(
+            "sub_1",
+            pending_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str()
+        );
     }
 
     #[test]
-    fn issue_redemptions_retroactive() {
+    fn reply_eligible() {
         let mut deps = default_deps(None);
 
-        let res = execute(
+        reply(
             deps.as_mut(),
             mock_env(),
-            mock_info("gp", &vec![]),
-            HandleMsg::IssueRedemptions {
-                redemptions: vec![Redemption {
-                    subscription: Addr::unchecked("sub_1"),
-                    asset: 10_000,
-                    capital: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: true,
+            Reply {
+                id: 1,
+                result: cosmwasm_std::SubMsgResult::Ok(SubMsgResponse {
+                    events: vec![
+                        Event::new("contract address").add_attribute("_contract_address", "sub_1")
+                    ],
+                    data: None,
+                }),
             },
         )
         .unwrap();
 
-        // verify execute message sent
-        assert_eq!(1, res.messages.len());
-        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
-        assert_eq!(0, funds.len());
+        // verify pending sub saved
+        assert_eq!(
+            "sub_1",
+            eligible_subscriptions_read(&deps.storage)
+                .load()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str()
+        );
     }
 
     #[test]
-    fn issue_redemptions_bad_actor() {
+    fn recover() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("gp_2"),
+            },
+        )
+        .unwrap();
+
+        // verify that gp has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp_2", state.gp);
+    }
+
+    #[test]
+    fn fail_bad_actor_recover() {
         let mut deps = default_deps(None);
 
         let res = execute(
             deps.as_mut(),
             mock_env(),
-            mock_info("bad_actor", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueRedemptions {
-                redemptions: vec![Redemption {
-                    subscription: Addr::unchecked("sub_1"),
-                    asset: 10_000,
-                    capital: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
+            mock_info("bad_actor", &vec![]),
+            HandleMsg::Recover {
+                gp: Addr::unchecked("bad_actor"),
             },
         );
         assert!(res.is_err());
-    }
 
-    #[test]
-    fn issue_distributions() {
-        let mut deps = default_deps(None);
-
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
-            },
-        )
-        .unwrap();
-
-        // verify execute message sent
-        assert_eq!(1, res.messages.len());
-        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
-        assert_eq!(1, funds.len());
-    }
-
-    #[test]
-    fn issue_distributions_retroactive() {
-        let mut deps = default_deps(None);
-
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("gp", &vec![]),
-            HandleMsg::IssueDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: true,
-            },
-        )
-        .unwrap();
-
-        // verify execute message sent
-        assert_eq!(1, res.messages.len());
-        let (_, _, funds) = execute_args(msg_at_index(&res, 0));
-        assert_eq!(0, funds.len());
-    }
-
-    #[test]
-    fn issue_distributions_bad_actor() {
-        let mut deps = default_deps(None);
-
-        let res = execute(
-            deps.as_mut(),
-            mock_env(),
-            mock_info("bad_actor", &coins(10_000, "stable_coin")),
-            HandleMsg::IssueDistributions {
-                distributions: vec![Distribution {
-                    subscription: Addr::unchecked("sub_1"),
-                    amount: 10_000,
-                }]
-                .into_iter()
-                .collect(),
-                is_retroactive: false,
-            },
-        );
-        assert!(res.is_err());
+        // verify that gp has NOT been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!("gp", state.gp);
     }
 
     #[test]
@@ -402,10 +286,9 @@ pub mod tests {
 
         // verify that send message is sent
         assert_eq!(1, res.messages.len());
-        assert!(matches!(
-            bank_msg(msg_at_index(&res, 0)),
-            BankMsg::Send { .. }
-        ));
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        assert_eq!("omni", to_address);
+        assert_eq!(10_000, coins.first().unwrap().amount.u128());
     }
 
     #[test]
