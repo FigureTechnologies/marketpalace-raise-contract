@@ -326,12 +326,15 @@
     "IssueAssetExchange": {
       "type": "object",
       "required": [
-        "exchange",
+        "exchanges",
         "subscription"
       ],
       "properties": {
-        "exchange": {
-          "$ref": "#/definitions/AssetExchange"
+        "exchanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetExchange"
+          }
         },
         "subscription": {
           "$ref": "#/definitions/Addr"
