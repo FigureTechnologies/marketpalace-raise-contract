@@ -180,6 +180,29 @@
     {
       "type": "object",
       "required": [
+        "update_eligible_subscriptions"
+      ],
+      "properties": {
+        "update_eligible_subscriptions": {
+          "type": "object",
+          "required": [
+            "subscriptions"
+          ],
+          "properties": {
+            "subscriptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Addr"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "accept_subscriptions"
       ],
       "properties": {

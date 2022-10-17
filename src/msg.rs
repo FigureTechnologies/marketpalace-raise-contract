@@ -47,6 +47,9 @@ pub enum HandleMsg {
         to: Option<Addr>,
         memo: Option<String>,
     },
+    UpdateEligibleSubscriptions {
+        subscriptions: Vec<Addr>,
+    },
     AcceptSubscriptions {
         subscriptions: Vec<AcceptSubscription>,
     },
