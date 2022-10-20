@@ -38,6 +38,10 @@ pub enum HandleMsg {
     },
     IssueAssetExchanges {
         asset_exchanges: Vec<IssueAssetExchange>,
+        staged_asset_exchanges: Option<Vec<IssueAssetExchange>>,
+    },
+    CommitAssetExchanges {
+        asset_exchanges: Vec<IssueAssetExchange>,
     },
     CancelAssetExchanges {
         cancellations: Vec<IssueAssetExchange>,

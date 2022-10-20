@@ -1,5 +1,6 @@
 use crate::error::contract_error;
 use crate::exchange_asset::try_cancel_asset_exchanges;
+use crate::exchange_asset::try_commit_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
 use crate::state::eligible_subscriptions;
@@ -104,8 +105,12 @@ pub fn execute(
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, info, subscriptions)
         }
-        HandleMsg::IssueAssetExchanges { asset_exchanges } => {
-            try_issue_asset_exchanges(deps, info, asset_exchanges)
+        HandleMsg::IssueAssetExchanges {
+            asset_exchanges,
+            staged_asset_exchanges,
+        } => try_issue_asset_exchanges(deps, info, asset_exchanges, staged_asset_exchanges),
+        HandleMsg::CommitAssetExchanges { asset_exchanges } => {
+            try_commit_asset_exchanges(deps, info, asset_exchanges)
         }
         HandleMsg::CancelAssetExchanges { cancellations } => {
             try_cancel_asset_exchanges(deps, info, cancellations)

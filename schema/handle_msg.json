@@ -109,6 +109,38 @@
               "items": {
                 "$ref": "#/definitions/IssueAssetExchange"
               }
+            },
+            "staged_asset_exchanges": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/definitions/IssueAssetExchange"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "commit_asset_exchanges"
+      ],
+      "properties": {
+        "commit_asset_exchanges": {
+          "type": "object",
+          "required": [
+            "asset_exchanges"
+          ],
+          "properties": {
+            "asset_exchanges": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/IssueAssetExchange"
+              }
             }
           }
         }

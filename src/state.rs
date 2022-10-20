@@ -12,6 +12,7 @@ use crate::msg::AssetExchange;
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
+pub static STAGED_ASSET_EXCHANGE_NAMESPACE: &[u8] = b"staged_asset_exchange";
 pub static ASSET_EXCHANGE_NAMESPACE: &[u8] = b"asset_exchange";
 
 pub static PENDING_SUBSCRIPTIONS_KEY: &[u8] = b"pending_subscriptions";
@@ -46,6 +47,16 @@ pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
 
 pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
     singleton_read(storage, CONFIG_KEY)
+}
+
+pub fn staged_asset_exchange_storage(storage: &mut dyn Storage) -> Bucket<Vec<AssetExchange>> {
+    bucket(storage, STAGED_ASSET_EXCHANGE_NAMESPACE)
+}
+
+pub fn staged_asset_exchange_storage_read(
+    storage: &dyn Storage,
+) -> ReadonlyBucket<Vec<AssetExchange>> {
+    bucket_read(storage, STAGED_ASSET_EXCHANGE_NAMESPACE)
 }
 
 pub fn asset_exchange_storage(storage: &mut dyn Storage) -> Bucket<Vec<AssetExchange>> {

@@ -9,23 +9,93 @@ use crate::{
     contract::ContractResponse,
     error::contract_error,
     msg::{AssetExchange, ExchangeDate, IssueAssetExchange},
-    state::{accepted_subscriptions_read, asset_exchange_storage, config_read},
+    state::{
+        accepted_subscriptions_read, asset_exchange_storage, config_read,
+        staged_asset_exchange_storage,
+    },
 };
 
-pub fn try_issue_asset_exchanges(
+pub fn try_commit_asset_exchanges(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
     asset_exchanges: Vec<IssueAssetExchange>,
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp && info.sender != state.recovery_admin {
+        return contract_error("only gp or admin can commit asset exchanges");
+    }
+
+    {
+        let mut storage = staged_asset_exchange_storage(deps.storage);
+        for issuance in &asset_exchanges {
+            let mut existing = storage
+                .may_load(issuance.subscription.as_bytes())?
+                .unwrap_or_default();
+
+            for exchange in &issuance.exchanges {
+                let index = existing
+                    .iter()
+                    .position(|e| exchange == e)
+                    .ok_or("no asset exchange found for subcription")?;
+
+                existing.remove(index);
+            }
+
+            storage.save(issuance.subscription.as_bytes(), &existing)?;
+        }
+    }
+
+    let mut issued_storage = asset_exchange_storage(deps.storage);
+    for mut issuance in asset_exchanges {
+        let mut issued_existing = issued_storage
+            .may_load(issuance.subscription.as_bytes())?
+            .unwrap_or_default();
+
+        issued_existing.append(&mut issuance.exchanges);
+
+        issued_storage.save(issuance.subscription.as_bytes(), &issued_existing)?;
+    }
+
+    Ok(Response::default())
+}
+
+pub fn try_issue_asset_exchanges(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    asset_exchanges: Vec<IssueAssetExchange>,
+    staged_asset_exchanges: Option<Vec<IssueAssetExchange>>,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+
+    if info.sender != state.gp {
+        return contract_error("only gp can issue asset exchanges");
+    }
+
     let accepted = accepted_subscriptions_read(deps.storage)
         .may_load()?
         .unwrap_or_default();
-    let mut storage = asset_exchange_storage(deps.storage);
 
-    if info.sender != state.gp {
-        return contract_error("only gp can issue redemptions");
+    {
+        if let Some(asset_exchanges) = staged_asset_exchanges {
+            let mut storage = staged_asset_exchange_storage(deps.storage);
+            for mut issuance in asset_exchanges {
+                if !accepted.contains(&issuance.subscription) {
+                    return contract_error("subscription not accepted");
+                }
+
+                let mut existing = storage
+                    .may_load(issuance.subscription.as_bytes())?
+                    .unwrap_or_default();
+
+                existing.append(&mut issuance.exchanges);
+
+                storage.save(issuance.subscription.as_bytes(), &existing)?;
+            }
+        }
     }
+
+    let mut storage = asset_exchange_storage(deps.storage);
 
     for mut issuance in asset_exchanges {
         if !accepted.contains(&issuance.subscription) {
@@ -218,6 +288,7 @@ pub mod tests {
     use crate::mock::send_args;
     use crate::msg::HandleMsg;
     use crate::msg::IssueAssetExchange;
+    use crate::state::staged_asset_exchange_storage_read;
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::tests::set_accepted;
     use cosmwasm_std::from_binary;
@@ -244,7 +315,7 @@ pub mod tests {
     #[test]
     fn issue_asset_exchange_for_capital_call() {
         let mut deps = default_deps(None);
-        set_accepted(&mut deps.storage, vec!["sub_1"]);
+        set_accepted(&mut deps.storage, vec!["sub_1", "sub_2"]);
         {
             asset_exchange_storage(&mut deps.storage)
                 .save(
@@ -273,6 +344,15 @@ pub mod tests {
                         date: None,
                     }],
                 }],
+                staged_asset_exchanges: Some(vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_2"),
+                    exchanges: vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                }]),
             },
         )
         .unwrap();
@@ -282,6 +362,15 @@ pub mod tests {
             2,
             asset_exchange_storage_read(&deps.storage)
                 .load(Addr::unchecked("sub_1").as_bytes())
+                .unwrap()
+                .len()
+        );
+
+        // verify staged asset exchange added
+        assert_eq!(
+            1,
+            staged_asset_exchange_storage_read(&deps.storage)
+                .load(Addr::unchecked("sub_2").as_bytes())
                 .unwrap()
                 .len()
         )
@@ -295,6 +384,7 @@ pub mod tests {
             mock_info("bad_actor", &vec![]),
             HandleMsg::IssueAssetExchanges {
                 asset_exchanges: vec![],
+                staged_asset_exchanges: None,
             },
         );
 
@@ -317,10 +407,102 @@ pub mod tests {
                         date: None,
                     }],
                 }],
+                staged_asset_exchanges: None,
             },
         );
 
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn commit_asset_exchange() {
+        let mut deps = default_deps(None);
+        {
+            staged_asset_exchange_storage(&mut deps.storage)
+                .save(
+                    Addr::unchecked("sub_1").as_bytes(),
+                    &vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                )
+                .unwrap();
+        }
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::CommitAssetExchanges {
+                asset_exchanges: vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_1"),
+                    exchanges: vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                }],
+            },
+        )
+        .unwrap();
+
+        // verify staged asset exchange removed
+        assert_eq!(
+            0,
+            staged_asset_exchange_storage_read(&deps.storage)
+                .load(Addr::unchecked("sub_1").as_bytes())
+                .unwrap()
+                .len()
+        );
+
+        // verify asset exchange added
+        assert_eq!(
+            1,
+            asset_exchange_storage_read(&deps.storage)
+                .load(Addr::unchecked("sub_1").as_bytes())
+                .unwrap()
+                .len()
+        );
+    }
+
+    #[test]
+    fn commit_asset_exchange_bad_actor() {
+        let mut deps = default_deps(None);
+        {
+            staged_asset_exchange_storage(&mut deps.storage)
+                .save(
+                    Addr::unchecked("sub_1").as_bytes(),
+                    &vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                )
+                .unwrap();
+        }
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &vec![]),
+            HandleMsg::CommitAssetExchanges {
+                asset_exchanges: vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_1"),
+                    exchanges: vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                }],
+            },
+        );
+
+        assert!(res.is_err())
     }
 
     #[test]
