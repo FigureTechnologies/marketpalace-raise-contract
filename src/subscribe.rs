@@ -202,7 +202,7 @@ fn verify_lp_eligibility(
     for acceptable in &state.required_attestations {
         if attributes.intersection(acceptable).count() == 0 {
             return Err(StdError::generic_err(
-                "subscription owner must have one of acceptable accreditations",
+                "subscription owner must have one of acceptable attestations",
             ));
         }
     }
