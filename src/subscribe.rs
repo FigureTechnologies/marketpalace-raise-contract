@@ -742,8 +742,15 @@ mod tests {
     fn accept_subscription_missing_acceptable_accreditation() {
         let mut deps = mock_sub_state();
 
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
+
         let mut state = State::test_default();
-        state.required_attestations = vec![vec![String::from("506c")].into_iter().collect()];
+        state.required_attestations = vec![
+            vec![String::from("506c"), String::from("506b")]
+                .into_iter()
+                .collect(),
+            vec![String::from("qp")].into_iter().collect(),
+        ];
         config(&mut deps.storage).save(&state).unwrap();
 
         set_pending(&mut deps.storage, vec!["sub_1"]);

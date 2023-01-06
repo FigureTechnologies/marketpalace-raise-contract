@@ -269,6 +269,25 @@ pub mod tests {
     }
 
     #[test]
+    fn update_required_attestations() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::UpdateRequiredAttestations {
+                required_attestations: vec![],
+            },
+        )
+        .unwrap();
+
+        // verify that gp has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!(0, state.required_attestations.len());
+    }
+
+    #[test]
     fn fail_bad_actor_recover() {
         let mut deps = default_deps(None);
 
