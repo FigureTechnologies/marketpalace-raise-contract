@@ -81,6 +81,21 @@ pub fn execute(
 
             Ok(Response::default())
         }
+        HandleMsg::UpdateRequiredAttestations {
+            required_attestations,
+        } => {
+            let mut state = config(deps.storage).load()?;
+
+            if info.sender != state.gp {
+                return contract_error("only gp can update required attestations");
+            }
+
+            state.required_attestations = required_attestations;
+
+            config(deps.storage).save(&state)?;
+
+            Ok(Response::default())
+        }
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
 

@@ -25,6 +25,33 @@
     {
       "type": "object",
       "required": [
+        "update_required_attestations"
+      ],
+      "properties": {
+        "update_required_attestations": {
+          "type": "object",
+          "required": [
+            "required_attestations"
+          ],
+          "properties": {
+            "required_attestations": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "migrate_subscriptions"
       ],
       "properties": {
