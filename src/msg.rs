@@ -19,7 +19,6 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
-    pub asset_exchanges: Vec<IssueAssetExchange>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -48,6 +47,9 @@ pub enum HandleMsg {
         to: Option<Addr>,
         memo: Option<String>,
     },
+    UpdateEligibleSubscriptions {
+        subscriptions: Vec<Addr>,
+    },
     AcceptSubscriptions {
         subscriptions: Vec<AcceptSubscription>,
     },
@@ -67,7 +69,7 @@ pub struct AcceptSubscription {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct IssueAssetExchange {
     pub subscription: Addr,
-    pub exchange: AssetExchange,
+    pub exchanges: Vec<AssetExchange>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

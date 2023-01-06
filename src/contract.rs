@@ -7,6 +7,7 @@ use crate::state::pending_subscriptions;
 use crate::subscribe::try_accept_subscriptions;
 use crate::subscribe::try_close_subscriptions;
 use crate::subscribe::try_propose_subscription;
+use crate::subscribe::try_upgrade_eligible_subscriptions;
 use cosmwasm_std::to_binary;
 use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{
@@ -96,6 +97,9 @@ pub fn execute(
         }
         HandleMsg::CloseSubscriptions { subscriptions } => {
             try_close_subscriptions(deps, info, subscriptions)
+        }
+        HandleMsg::UpdateEligibleSubscriptions { subscriptions } => {
+            try_upgrade_eligible_subscriptions(deps, info, subscriptions)
         }
         HandleMsg::AcceptSubscriptions { subscriptions } => {
             try_accept_subscriptions(deps, info, subscriptions)
