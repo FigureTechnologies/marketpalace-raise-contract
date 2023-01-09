@@ -1,13 +1,13 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
 use crate::msg::{AcceptSubscription, AssetExchange};
-use crate::state::{accepted_subscriptions, config_read, pending_subscriptions};
+use crate::state::{accepted_subscriptions, config_read, pending_subscriptions, State};
 use crate::state::{asset_exchange_storage, eligible_subscriptions};
 use crate::sub_msg::{SubInstantiateMsg, SubQueryMsg, SubState};
-use cosmwasm_std::MessageInfo;
-use cosmwasm_std::Response;
 use cosmwasm_std::{to_binary, Addr, Env, SubMsg, WasmMsg};
 use cosmwasm_std::{Deps, DepsMut};
+use cosmwasm_std::{MessageInfo, StdResult};
+use cosmwasm_std::{Response, StdError};
 use provwasm_std::ProvenanceQuerier;
 use provwasm_std::ProvenanceQuery;
 use std::collections::HashSet;
@@ -21,16 +21,8 @@ pub fn try_propose_subscription(
 ) -> ContractResponse {
     let state = config_read(deps.storage).load()?;
 
-    let eligible = if state.acceptable_accreditations.is_empty() {
-        true
-    } else {
-        let attributes = attributes(deps.as_ref(), &info.sender);
-
-        attributes
-            .intersection(&state.acceptable_accreditations)
-            .count()
-            > 0
-    };
+    let lp = || Ok(info.sender.clone());
+    let eligible = verify_lp_eligibility(deps.as_ref(), &state, &lp).is_ok();
 
     let create_sub = SubMsg::reply_always(
         WasmMsg::Instantiate {
@@ -54,16 +46,6 @@ pub fn try_propose_subscription(
     Ok(Response::new()
         .add_submessage(create_sub)
         .add_attribute("eligible", format!("{}", eligible)))
-}
-
-fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
-    ProvenanceQuerier::new(&deps.querier)
-        .get_attributes(lp.clone(), None as Option<String>)
-        .unwrap()
-        .attributes
-        .into_iter()
-        .map(|attribute| attribute.name)
-        .collect()
 }
 
 pub fn try_close_subscriptions(
@@ -112,6 +94,41 @@ pub fn try_close_subscriptions(
     Ok(Response::new())
 }
 
+pub fn try_upgrade_eligible_subscriptions(
+    deps: DepsMut<ProvenanceQuery>,
+    info: MessageInfo,
+    subcriptions: Vec<Addr>,
+) -> ContractResponse {
+    let state = config_read(deps.storage).load()?;
+    let mut pending = pending_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+    let mut eligible = eligible_subscriptions(deps.storage)
+        .may_load()?
+        .unwrap_or_default();
+
+    if info.sender != state.gp && info.sender != state.recovery_admin {
+        return contract_error("only gp or admin can upgrade pending subs to eligible");
+    }
+
+    for sub in subcriptions {
+        if pending.contains(&sub) {
+            let lp = || lp_for_sub(deps.as_ref(), &sub);
+            verify_lp_eligibility(deps.as_ref(), &state, &lp)?;
+
+            pending.remove(&sub);
+            eligible.insert(sub);
+        } else {
+            return contract_error("subscription must be pending");
+        }
+    }
+
+    pending_subscriptions(deps.storage).save(&pending)?;
+    eligible_subscriptions(deps.storage).save(&eligible)?;
+
+    Ok(Response::default())
+}
+
 pub fn try_accept_subscriptions(
     deps: DepsMut<ProvenanceQuery>,
     info: MessageInfo,
@@ -140,23 +157,8 @@ pub fn try_accept_subscriptions(
         if eligible.contains(&accept.subscription) {
             eligible.remove(&accept.subscription);
         } else if pending.contains(&accept.subscription) {
-            if !state.acceptable_accreditations.is_empty() {
-                let sub_state: SubState = deps
-                    .querier
-                    .query_wasm_smart(accept.subscription.clone(), &SubQueryMsg::GetState {})?;
-
-                let attributes: HashSet<String> = attributes(deps.as_ref(), &sub_state.lp);
-
-                if attributes
-                    .intersection(&state.acceptable_accreditations)
-                    .count()
-                    == 0
-                {
-                    return contract_error(
-                        "subscription owner must have one of acceptable accreditations",
-                    );
-                }
-            }
+            let lp = || lp_for_sub(deps.as_ref(), &accept.subscription);
+            verify_lp_eligibility(deps.as_ref(), &state, &lp)?;
 
             pending.remove(&accept.subscription);
         } else {
@@ -184,6 +186,48 @@ pub fn try_accept_subscriptions(
     accepted_subscriptions(deps.storage).save(&accepted)?;
 
     Ok(Response::default())
+}
+
+fn verify_lp_eligibility(
+    deps: Deps<ProvenanceQuery>,
+    state: &State,
+    lp: &dyn Fn() -> StdResult<Addr>,
+) -> StdResult<()> {
+    if state.acceptable_accreditations.is_empty() {
+        return Ok(());
+    }
+
+    let attributes: HashSet<String> = attributes(deps, &lp()?);
+
+    if attributes
+        .intersection(&state.acceptable_accreditations)
+        .count()
+        == 0
+    {
+        Err(StdError::generic_err(
+            "subscription owner must have one of acceptable accreditations",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn lp_for_sub(deps: Deps<ProvenanceQuery>, sub: &Addr) -> StdResult<Addr> {
+    let sub_state: SubState = deps
+        .querier
+        .query_wasm_smart(sub.clone(), &SubQueryMsg::GetState {})?;
+
+    Ok(sub_state.lp)
+}
+
+fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
+    ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(lp.clone(), None as Option<String>)
+        .unwrap()
+        .attributes
+        .into_iter()
+        .map(|attribute| attribute.name)
+        .collect()
 }
 
 #[cfg(test)]
@@ -483,6 +527,83 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_eligible_subscriptions_as_gp() {
+        let mut deps = mock_sub_state();
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
+        config(&mut deps.storage)
+            .save(&State::test_default())
+            .unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
+
+        // upgrade eligible sub as gp
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::UpdateEligibleSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")],
+            },
+        )
+        .unwrap();
+
+        // assert that the sub has moved from pending review to accepted
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
+        let state: RaiseState = from_binary(&res).unwrap();
+        assert_eq!(0, state.pending_subscriptions.len());
+        assert_eq!(1, state.eligible_subscriptions.len());
+    }
+
+    #[test]
+    fn upgrade_eligible_subscriptions_as_admin() {
+        let mut deps = mock_sub_state();
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
+        config(&mut deps.storage)
+            .save(&State::test_default())
+            .unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
+
+        // upgrade eligible sub as admin
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &[]),
+            HandleMsg::UpdateEligibleSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")],
+            },
+        )
+        .unwrap();
+
+        // assert that the sub has moved from pending review to accepted
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetState {}).unwrap();
+        let state: RaiseState = from_binary(&res).unwrap();
+        assert_eq!(0, state.pending_subscriptions.len());
+        assert_eq!(1, state.eligible_subscriptions.len());
+    }
+
+    #[test]
+    fn upgrade_eligible_subscriptions_bad_actor() {
+        let mut deps = mock_sub_state();
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
+        config(&mut deps.storage)
+            .save(&State::test_default())
+            .unwrap();
+        set_pending(&mut deps.storage, vec!["sub_1"]);
+
+        // upgrade eligible sub as admin
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::UpdateEligibleSubscriptions {
+                subscriptions: vec![Addr::unchecked("sub_1")],
+            },
+        );
+
+        // assert error
+        assert!(res.is_err())
+    }
+
+    #[test]
     fn accept_pending_subscription() {
         let mut deps = mock_sub_state();
         deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
@@ -500,9 +621,7 @@ mod tests {
                 subscriptions: vec![AcceptSubscription {
                     subscription: Addr::unchecked("sub_1"),
                     commitment_in_capital: 20_000,
-                }]
-                .into_iter()
-                .collect(),
+                }],
             },
         )
         .unwrap();

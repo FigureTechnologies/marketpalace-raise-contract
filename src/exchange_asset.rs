@@ -27,7 +27,7 @@ pub fn try_issue_asset_exchanges(
         return contract_error("only gp can issue redemptions");
     }
 
-    for issuance in asset_exchanges {
+    for mut issuance in asset_exchanges {
         if !accepted.contains(&issuance.subscription) {
             return contract_error("subscription not accepted");
         }
@@ -36,7 +36,7 @@ pub fn try_issue_asset_exchanges(
             .may_load(issuance.subscription.as_bytes())?
             .unwrap_or_default();
 
-        existing.push(issuance.exchange.clone());
+        existing.append(&mut issuance.exchanges);
 
         storage.save(issuance.subscription.as_bytes(), &existing)?;
     }
@@ -61,11 +61,14 @@ pub fn try_cancel_asset_exchanges(
             .may_load(cancel.subscription.as_bytes())?
             .ok_or("no asset exchange found for subscription")?;
 
-        let index = existing
-            .iter()
-            .position(|e| &cancel.exchange == e)
-            .ok_or("no asset exchange found for subcription")?;
-        existing.remove(index);
+        for exchange in &cancel.exchanges {
+            let index = existing
+                .iter()
+                .position(|e| exchange == e)
+                .ok_or("no asset exchange found for subcription")?;
+
+            existing.remove(index);
+        }
 
         storage.save(cancel.subscription.as_bytes(), &existing)?;
     }
@@ -263,12 +266,12 @@ pub mod tests {
             HandleMsg::IssueAssetExchanges {
                 asset_exchanges: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    exchange: AssetExchange {
+                    exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
-                    },
+                    }],
                 }],
             },
         )
@@ -307,12 +310,12 @@ pub mod tests {
             HandleMsg::IssueAssetExchanges {
                 asset_exchanges: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    exchange: AssetExchange {
+                    exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
-                    },
+                    }],
                 }],
             },
         );
@@ -344,12 +347,12 @@ pub mod tests {
             HandleMsg::CancelAssetExchanges {
                 cancellations: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    exchange: AssetExchange {
+                    exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
-                    },
+                    }],
                 }],
             },
         )
@@ -388,12 +391,12 @@ pub mod tests {
             HandleMsg::CancelAssetExchanges {
                 cancellations: vec![IssueAssetExchange {
                     subscription: Addr::unchecked("sub_1"),
-                    exchange: AssetExchange {
+                    exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
                         capital: Some(-1_000),
                         date: None,
-                    },
+                    }],
                 }],
             },
         );
