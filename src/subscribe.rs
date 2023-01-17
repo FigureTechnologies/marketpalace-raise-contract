@@ -193,23 +193,21 @@ fn verify_lp_eligibility(
     state: &State,
     lp: &dyn Fn() -> StdResult<Addr>,
 ) -> StdResult<()> {
-    if state.acceptable_accreditations.is_empty() {
+    if state.required_attestations.is_empty() {
         return Ok(());
     }
 
     let attributes: HashSet<String> = attributes(deps, &lp()?);
 
-    if attributes
-        .intersection(&state.acceptable_accreditations)
-        .count()
-        == 0
-    {
-        Err(StdError::generic_err(
-            "subscription owner must have one of acceptable accreditations",
-        ))
-    } else {
-        Ok(())
+    for acceptable in &state.required_attestations {
+        if attributes.intersection(acceptable).count() == 0 {
+            return Err(StdError::generic_err(
+                "subscription owner must have one of acceptable attestations",
+            ));
+        }
     }
+
+    Ok(())
 }
 
 fn lp_for_sub(deps: Deps<ProvenanceQuery>, sub: &Addr) -> StdResult<Addr> {
@@ -744,8 +742,15 @@ mod tests {
     fn accept_subscription_missing_acceptable_accreditation() {
         let mut deps = mock_sub_state();
 
+        deps.querier.base.with_attributes("lp", &[("506c", "", "")]);
+
         let mut state = State::test_default();
-        state.acceptable_accreditations = vec![String::from("506c")].into_iter().collect();
+        state.required_attestations = vec![
+            vec![String::from("506c"), String::from("506b")]
+                .into_iter()
+                .collect(),
+            vec![String::from("qp")].into_iter().collect(),
+        ];
         config(&mut deps.storage).save(&state).unwrap();
 
         set_pending(&mut deps.storage, vec!["sub_1"]);

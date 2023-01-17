@@ -81,6 +81,21 @@ pub fn execute(
 
             Ok(Response::default())
         }
+        HandleMsg::UpdateRequiredAttestations {
+            required_attestations,
+        } => {
+            let mut state = config(deps.storage).load()?;
+
+            if info.sender != state.gp {
+                return contract_error("only gp can update required attestations");
+            }
+
+            state.required_attestations = required_attestations;
+
+            config(deps.storage).save(&state)?;
+
+            Ok(Response::default())
+        }
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
 
@@ -251,6 +266,25 @@ pub mod tests {
         // verify that gp has been updated
         let state = config_read(&deps.storage).load().unwrap();
         assert_eq!("gp_2", state.gp);
+    }
+
+    #[test]
+    fn update_required_attestations() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::UpdateRequiredAttestations {
+                required_attestations: vec![],
+            },
+        )
+        .unwrap();
+
+        // verify that gp has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!(0, state.required_attestations.len());
     }
 
     #[test]

@@ -10,7 +10,7 @@ use crate::state::State;
 pub struct InstantiateMsg {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
-    pub acceptable_accreditations: HashSet<String>,
+    pub required_attestations: Vec<HashSet<String>>,
     pub capital_denom: String,
     pub capital_per_share: u64,
 }
@@ -26,6 +26,9 @@ pub struct MigrateMsg {
 pub enum HandleMsg {
     Recover {
         gp: Addr,
+    },
+    UpdateRequiredAttestations {
+        required_attestations: Vec<HashSet<String>>,
     },
     MigrateSubscriptions {
         subscriptions: HashSet<Addr>,
