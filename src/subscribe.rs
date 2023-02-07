@@ -53,7 +53,7 @@ pub fn try_propose_subscription(
 
     Ok(Response::new()
         .add_submessage(create_sub)
-        .add_attribute("eligible", format!("{}", eligible)))
+        .add_attribute("eligible", format!("{eligible}")))
 }
 
 fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
