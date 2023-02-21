@@ -1,8 +1,8 @@
 use cosmwasm_std::to_binary;
 use cosmwasm_std::WasmMsg;
 use cosmwasm_std::{
-    coins, entry_point, Addr, Attribute, BankMsg, CosmosMsg, DepsMut, Env, Event, MessageInfo,
-    Reply, Response, SubMsgResult,
+    coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
+    Response, SubMsgResult,
 };
 use provwasm_std::ProvenanceQuery;
 use provwasm_std::{transfer_marker_coins, MarkerType, ProvenanceMsg, ProvenanceQuerier};
@@ -137,25 +137,6 @@ pub fn execute(
                 return contract_error("only gp can redeem capital");
             }
 
-            let capital_marker =
-                ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
-
-            let mut bank_send: Option<BankMsg> = None;
-            let mut marker_transfer: Option<CosmosMsg<ProvenanceMsg>> = None;
-            if capital_marker.marker_type == MarkerType::Coin {
-                bank_send = Some(BankMsg::Send {
-                    to_address: to.to_string(),
-                    amount: coins(amount as u128, &state.capital_denom),
-                });
-            } else {
-                marker_transfer = Some(transfer_marker_coins(
-                    amount as u128,
-                    &state.capital_denom,
-                    to,
-                    env.contract.address,
-                )?)
-            };
-
             let attributes = match memo {
                 Some(memo) => {
                     vec![Attribute {
@@ -166,16 +147,28 @@ pub fn execute(
                 None => vec![],
             };
 
-            let response;
-            if let Some(bank_send_msg) = bank_send {
-                response = Response::new()
-                    .add_message(bank_send_msg)
-                    .add_attributes(attributes);
+            let capital_marker =
+                ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
+            let response = if capital_marker.marker_type == MarkerType::Coin {
+                let bank_send = BankMsg::Send {
+                    to_address: to.to_string(),
+                    amount: coins(amount as u128, &state.capital_denom),
+                };
+                Response::new()
+                    .add_message(bank_send)
+                    .add_attributes(attributes)
             } else {
-                response = Response::new()
-                    .add_message(marker_transfer.unwrap())
-                    .add_attributes(attributes);
-            }
+                let marker_transfer = transfer_marker_coins(
+                    amount as u128,
+                    &state.capital_denom,
+                    to,
+                    env.contract.address,
+                )?;
+                Response::new()
+                    .add_message(marker_transfer)
+                    .add_attributes(attributes)
+            };
+
             Ok(response)
         }
     }
@@ -432,7 +425,6 @@ pub mod tests {
 
         // verify that send message is sent
         assert_eq!(1, res.messages.len());
-        println!("{:?}", msg_at_index(&res, 0));
         assert_eq!(
             &MarkerMsgParams::TransferMarkerCoins {
                 coin: coin(10_000, "restricted_capital_coin"),
