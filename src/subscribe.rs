@@ -45,7 +45,7 @@ pub fn try_propose_subscription(
 
     Ok(Response::new()
         .add_submessage(create_sub)
-        .add_attribute("eligible", format!("{}", eligible)))
+        .add_attribute("eligible", format!("{eligible}")))
 }
 
 pub fn try_close_subscriptions(
