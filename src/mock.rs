@@ -98,7 +98,12 @@ pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
 pub fn marker_transfer_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
     if let CosmosMsg::Custom(msg) = msg {
         if let ProvenanceMsgParams::Marker(params) = &msg.params {
-            if let MarkerMsgParams::TransferMarkerCoins { coin, to, from } = params {
+            if let MarkerMsgParams::TransferMarkerCoins {
+                coin: _,
+                to: _,
+                from: _,
+            } = params
+            {
                 params
             } else {
                 panic!("not a marker transfer message!")
@@ -189,7 +194,7 @@ pub fn load_markers(querier: &mut ProvenanceMockQuerier) {
     querier.with_markers(vec![
         get_marker("commitment"),
         get_marker("investment"),
-        get_marker("capital_coin"),
-        get_marker("restricted_capital_coin"),
+        get_marker("capital"),
+        get_marker("restricted_capital"),
     ]);
 }

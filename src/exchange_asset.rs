@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
-    burn_marker_supply, mint_marker_supply, withdraw_coins, ProvenanceQuerier, ProvenanceQuery,
+    burn_marker_supply, mint_marker_supply, transfer_marker_coins, withdraw_coins, MarkerType,
+    ProvenanceQuerier, ProvenanceQuery,
 };
 
 use crate::{
@@ -193,12 +194,23 @@ pub fn try_complete_asset_exchange(
     let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
     let abs_capital = total_capital.unsigned_abs();
     if total_capital > 0 {
-        let send_capital = BankMsg::Send {
-            to_address: to.unwrap_or(info.sender).into_string(),
-            amount: coins(abs_capital.into(), state.capital_denom),
+        let capital_marker =
+            ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
+        if capital_marker.marker_type == MarkerType::Coin {
+            let send_capital = BankMsg::Send {
+                to_address: to.unwrap_or(info.sender).into_string(),
+                amount: coins(abs_capital.into(), state.capital_denom),
+            };
+            response = response.add_message(send_capital)
+        } else {
+            let marker_transfer = transfer_marker_coins(
+                abs_capital.into(),
+                &state.capital_denom,
+                to.unwrap_or(info.sender),
+                env.contract.address,
+            )?;
+            response = response.add_message(marker_transfer);
         };
-
-        response = response.add_message(send_capital);
     }
 
     Ok(match memo {
@@ -211,20 +223,21 @@ pub fn try_complete_asset_exchange(
 pub mod tests {
     use super::*;
     use crate::contract::execute;
-    use crate::contract::tests::default_deps;
-    use crate::mock::burn_args;
+    use crate::contract::tests::{capital_coin_deps, default_deps, restricted_capital_coin_deps};
     use crate::mock::load_markers;
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
+    use crate::mock::{burn_args, marker_transfer_msg};
     use crate::msg::HandleMsg;
     use crate::msg::IssueAssetExchange;
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::tests::set_accepted;
     use cosmwasm_std::from_binary;
-    use cosmwasm_std::testing::{mock_env, mock_info};
+    use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
+    use provwasm_std::MarkerMsgParams;
 
     #[test]
     fn size() {
@@ -406,7 +419,7 @@ pub mod tests {
 
     #[test]
     fn complete_asset_exchange() {
-        let mut deps = default_deps(None);
+        let mut deps = capital_coin_deps(None);
         load_markers(&mut deps.querier);
         {
             asset_exchange_storage(&mut deps.storage)
@@ -479,8 +492,99 @@ pub mod tests {
         let (to_address, coins) = send_args(msg_at_index(&res, 2));
         let coin = coins.first().unwrap();
         assert_eq!("destination", to_address);
-        assert_eq!("stable_coin", coin.denom);
+        assert_eq!("capital_coin", coin.denom);
         assert_eq!(2_000, coin.amount.u128());
+
+        // verify exchange is removed
+        assert_eq!(
+            0,
+            asset_exchange_storage_read(&deps.storage)
+                .load(Addr::unchecked("sub_1").as_bytes())
+                .unwrap()
+                .len()
+        )
+    }
+
+    #[test]
+    fn complete_asset_exchange_with_restricted_marker() {
+        let mut deps = restricted_capital_coin_deps(None);
+        load_markers(&mut deps.querier);
+        {
+            asset_exchange_storage(&mut deps.storage)
+                .save(
+                    Addr::unchecked("sub_1").as_bytes(),
+                    &vec![
+                        AssetExchange {
+                            investment: Some(-1_000),
+                            commitment_in_shares: None,
+                            capital: Some(1_000),
+                            date: None,
+                        },
+                        AssetExchange {
+                            investment: Some(-1_000),
+                            commitment_in_shares: None,
+                            capital: Some(1_000),
+                            date: None,
+                        },
+                    ],
+                )
+                .unwrap();
+        }
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("sub_1", &coins(1_000, "investment_coin")),
+            HandleMsg::CompleteAssetExchange {
+                exchanges: vec![
+                    AssetExchange {
+                        investment: Some(-1_000),
+                        commitment_in_shares: None,
+                        capital: Some(1_000),
+                        date: None,
+                    },
+                    AssetExchange {
+                        investment: Some(-1_000),
+                        commitment_in_shares: None,
+                        capital: Some(1_000),
+                        date: None,
+                    },
+                ],
+                to: Some(Addr::unchecked("destination")),
+                memo: Some(String::from("note")),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(3, res.messages.len());
+
+        // verify memo
+        assert_eq!(1, res.attributes.len());
+        let attribute = res.attributes.get(0).unwrap();
+        assert_eq!("memo", attribute.key);
+        assert_eq!("note", attribute.value);
+
+        // verify deposit investment
+        let (to_address, coins) = send_args(msg_at_index(&res, 0));
+        let coin = coins.first().unwrap();
+        assert_eq!("tp18vd8fpwxzck93qlwghaj6arh4p7c5n89x8kskz", to_address);
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!(2_000, coin.amount.u128());
+
+        // verify burn investment
+        let coin = burn_args(msg_at_index(&res, 1));
+        assert_eq!("investment_coin", coin.denom);
+        assert_eq!(2_000, coin.amount.u128());
+
+        // verify transfer message
+        assert_eq!(
+            &MarkerMsgParams::TransferMarkerCoins {
+                coin: cosmwasm_std::coin(2_000, "restricted_capital_coin"),
+                to: Addr::unchecked("destination"),
+                from: Addr::unchecked(MOCK_CONTRACT_ADDR),
+            },
+            marker_transfer_msg(msg_at_index(&res, 2)),
+        );
 
         // verify exchange is removed
         assert_eq!(
