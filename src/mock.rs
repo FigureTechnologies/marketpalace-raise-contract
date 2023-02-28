@@ -95,27 +95,6 @@ pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
     }
 }
 
-pub fn marker_transfer_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
-    if let CosmosMsg::Custom(msg) = msg {
-        if let ProvenanceMsgParams::Marker(params) = &msg.params {
-            if let MarkerMsgParams::TransferMarkerCoins {
-                coin: _,
-                to: _,
-                from: _,
-            } = params
-            {
-                params
-            } else {
-                panic!("not a marker transfer message!")
-            }
-        } else {
-            panic!("not a marker message!")
-        }
-    } else {
-        panic!("not a cosmos custom message!")
-    }
-}
-
 pub fn mint_args(msg: &CosmosMsg<ProvenanceMsg>) -> &Coin {
     if let MarkerMsgParams::MintMarkerSupply { coin } = marker_msg(msg) {
         coin

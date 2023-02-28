@@ -28,6 +28,7 @@ pub struct State {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
+    pub fiat_deposit_addr: Option<Addr>,
 }
 
 impl State {
@@ -97,6 +98,7 @@ pub mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
+                fiat_deposit_addr: None,
             }
         }
     }

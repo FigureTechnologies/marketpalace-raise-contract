@@ -13,6 +13,7 @@ pub struct InstantiateMsg {
     pub required_attestations: Vec<HashSet<String>>,
     pub capital_denom: String,
     pub capital_per_share: u64,
+    pub fiat_deposit_addr: Option<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -36,6 +36,7 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, _: MigrateMsg) -> Contrac
         investment_denom: old_state.investment_denom,
         capital_denom: old_state.capital_denom,
         capital_per_share: old_state.capital_per_share,
+        fiat_deposit_addr: None,
     };
 
     config(deps.storage).save(&new_state)?;

@@ -18,6 +18,16 @@
       "format": "uint64",
       "minimum": 0.0
     },
+    "fiat_deposit_addr": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "recovery_admin": {
       "$ref": "#/definitions/Addr"
     },
