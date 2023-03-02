@@ -36,6 +36,7 @@ pub fn try_propose_subscription(
                 capital_denom: state.capital_denom,
                 capital_per_share: state.capital_per_share,
                 initial_commitment,
+                required_capital_attribute: state.required_capital_attribute,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -271,6 +272,7 @@ mod tests {
                     investment_denom: String::from("raise_1.investment"),
                     capital_denom: String::from("stable_coin"),
                     capital_per_share: 1,
+                    required_capital_attribute: None,
                 })
                 .unwrap(),
             ))
@@ -307,6 +309,7 @@ mod tests {
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
                 initial_commitment: Some(100),
+                required_capital_attribute: None,
             },
             msg
         );
@@ -353,6 +356,7 @@ mod tests {
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
                 initial_commitment: Some(100),
+                required_capital_attribute: None,
             },
             msg
         );

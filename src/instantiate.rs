@@ -32,6 +32,7 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         capital_per_share: msg.capital_per_share,
+        required_capital_attribute: msg.required_capital_attribute,
     };
 
     config(deps.storage).save(&state)?;
@@ -90,6 +91,7 @@ mod tests {
                 required_attestations: vec![],
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
+                required_capital_attribute: None,
             },
         )
         .unwrap();
