@@ -1,11 +1,11 @@
 use std::cmp::Ordering;
 
-use cosmwasm_std::{coins, wasm_execute, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
-    burn_marker_supply, mint_marker_supply, withdraw_coins, ProvenanceQuerier, ProvenanceQuery,
+    burn_marker_supply, mint_marker_supply, transfer_marker_coins, withdraw_coins, MarkerType,
+    ProvenanceQuerier, ProvenanceQuery,
 };
 
-use crate::fiat_deposit_msg::FiatDepositExecuteMsg;
 use crate::{
     contract::ContractResponse,
     error::contract_error,
@@ -194,27 +194,24 @@ pub fn try_complete_asset_exchange(
     let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
     let abs_capital = total_capital.unsigned_abs();
     if total_capital > 0 {
-        match state.fiat_deposit_addr {
-            Some(fiat_deposit_addr) => {
-                let fiat_deposit_transfer = wasm_execute(
-                    fiat_deposit_addr.into_string(),
-                    &FiatDepositExecuteMsg::Transfer {
-                        amount: abs_capital.into(),
-                        recipient: to.unwrap_or(info.sender).into(),
-                    },
-                    vec![],
-                )?;
-                response = response.add_message(fiat_deposit_transfer)
-            }
-            None => {
-                let send_capital = BankMsg::Send {
-                    to_address: to.unwrap_or(info.sender).into_string(),
-                    amount: coins(abs_capital.into(), state.capital_denom),
-                };
-                response = response.add_message(send_capital)
-            }
+        let capital_marker =
+            ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
+        if capital_marker.marker_type == MarkerType::Coin {
+            let send_capital = BankMsg::Send {
+                to_address: to.unwrap_or(info.sender).into_string(),
+                amount: coins(abs_capital.into(), state.capital_denom),
+            };
+            response = response.add_message(send_capital)
+        } else {
+            let marker_transfer = transfer_marker_coins(
+                abs_capital.into(),
+                &state.capital_denom,
+                to.unwrap_or(info.sender),
+                env.contract.address,
+            )?;
+            response = response.add_message(marker_transfer);
         };
-    };
+    }
 
     Ok(match memo {
         Some(memo) => response.add_attribute(String::from("memo"), memo),
@@ -226,20 +223,21 @@ pub fn try_complete_asset_exchange(
 pub mod tests {
     use super::*;
     use crate::contract::execute;
-    use crate::contract::tests::{capital_coin_deps, default_deps, fiat_deposit_coin_deps};
-    use crate::mock::burn_args;
+    use crate::contract::tests::{capital_coin_deps, default_deps, restricted_capital_coin_deps};
+    use crate::mock::load_markers;
     use crate::mock::msg_at_index;
     use crate::mock::send_args;
-    use crate::mock::{execute_args, load_markers};
+    use crate::mock::{burn_args, marker_transfer_msg};
     use crate::msg::HandleMsg;
     use crate::msg::IssueAssetExchange;
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::tests::set_accepted;
-    use cosmwasm_std::testing::{mock_env, mock_info};
+    use cosmwasm_std::from_binary;
+    use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
-    use cosmwasm_std::{from_binary, Uint128};
+    use provwasm_std::MarkerMsgParams;
 
     #[test]
     fn size() {
@@ -508,8 +506,8 @@ pub mod tests {
     }
 
     #[test]
-    fn complete_asset_exchange_with_fiat_deposit_marker() {
-        let mut deps = fiat_deposit_coin_deps(None);
+    fn complete_asset_exchange_with_restricted_marker() {
+        let mut deps = restricted_capital_coin_deps(None);
         load_markers(&mut deps.querier);
         {
             asset_exchange_storage(&mut deps.storage)
@@ -579,15 +577,14 @@ pub mod tests {
         assert_eq!(2_000, coin.amount.u128());
 
         // verify transfer message
-        let (_recipient, msg, funds) = execute_args::<FiatDepositExecuteMsg>(msg_at_index(&res, 2));
         assert_eq!(
-            FiatDepositExecuteMsg::Transfer {
-                amount: Uint128::from(2_000 as u128),
-                recipient: "destination".to_owned(),
+            &MarkerMsgParams::TransferMarkerCoins {
+                coin: cosmwasm_std::coin(2_000, "restricted_capital_coin"),
+                to: Addr::unchecked("destination"),
+                from: Addr::unchecked(MOCK_CONTRACT_ADDR),
             },
-            msg
+            marker_transfer_msg(msg_at_index(&res, 2)),
         );
-        assert_eq!(0, funds.len());
 
         // verify exchange is removed
         assert_eq!(
@@ -596,7 +593,7 @@ pub mod tests {
                 .load(Addr::unchecked("sub_1").as_bytes())
                 .unwrap()
                 .len()
-        );
+        )
     }
 
     #[test]
