@@ -31,6 +31,12 @@
         "uniqueItems": true
       }
     },
+    "required_capital_attribute": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "subscription_code_id": {
       "type": "integer",
       "format": "uint64",

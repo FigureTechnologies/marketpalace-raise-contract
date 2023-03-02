@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
+use std::vec::IntoIter;
 
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
-    burn_marker_supply, mint_marker_supply, transfer_marker_coins, withdraw_coins, MarkerType,
+    burn_marker_supply, mint_marker_supply, transfer_marker_coins, withdraw_coins,
     ProvenanceQuerier, ProvenanceQuery,
 };
 
@@ -117,11 +118,11 @@ pub fn try_complete_asset_exchange(
         }
     }
 
-    let mut response = Response::new();
+    let response = Response::new();
 
     let total_investment: i64 = exchanges.iter().filter_map(|e| e.investment).sum();
     let abs_investment = total_investment.unsigned_abs();
-    match total_investment.cmp(&0) {
+    let response = match total_investment.cmp(&0) {
         Ordering::Less => {
             let investment_marker = ProvenanceQuerier::new(&deps.querier)
                 .get_marker_by_denom(state.investment_denom.clone())?;
@@ -132,9 +133,9 @@ pub fn try_complete_asset_exchange(
             let burn_investment =
                 burn_marker_supply(abs_investment.into(), state.investment_denom.clone())?;
 
-            response = response
+            response
                 .add_message(deposit_investment)
-                .add_message(burn_investment);
+                .add_message(burn_investment)
         }
         Ordering::Greater => {
             let mint_investment =
@@ -146,19 +147,19 @@ pub fn try_complete_asset_exchange(
                 info.sender.clone(),
             )?;
 
-            response = response
+            response
                 .add_message(mint_investment)
-                .add_message(withdraw_investment);
+                .add_message(withdraw_investment)
         }
-        _ => {}
-    }
+        _ => response,
+    };
 
     let total_commitment: i64 = exchanges
         .iter()
         .filter_map(|e| e.commitment_in_shares)
         .sum();
     let abs_commitment = total_commitment.unsigned_abs();
-    match total_commitment.cmp(&0) {
+    let response = match total_commitment.cmp(&0) {
         Ordering::Less => {
             let deposit_commitment = BankMsg::Send {
                 to_address: ProvenanceQuerier::new(&deps.querier)
@@ -170,9 +171,9 @@ pub fn try_complete_asset_exchange(
             let burn_commitment =
                 burn_marker_supply(abs_commitment.into(), state.commitment_denom)?;
 
-            response = response
+            response
                 .add_message(deposit_commitment)
-                .add_message(burn_commitment);
+                .add_message(burn_commitment)
         }
         Ordering::Greater => {
             let mint_commitment =
@@ -184,39 +185,66 @@ pub fn try_complete_asset_exchange(
                 info.sender.clone(),
             )?;
 
-            response = response
+            response
                 .add_message(mint_commitment)
-                .add_message(withdraw_commitment);
+                .add_message(withdraw_commitment)
         }
-        _ => {}
-    }
+        _ => response,
+    };
 
     let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
     let abs_capital = total_capital.unsigned_abs();
-    if total_capital > 0 {
-        let capital_marker =
-            ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
-        if capital_marker.marker_type == MarkerType::Coin {
-            let send_capital = BankMsg::Send {
-                to_address: to.unwrap_or(info.sender).into_string(),
-                amount: coins(abs_capital.into(), state.capital_denom),
-            };
-            response = response.add_message(send_capital)
-        } else {
-            let marker_transfer = transfer_marker_coins(
-                abs_capital.into(),
-                &state.capital_denom,
-                to.unwrap_or(info.sender),
-                env.contract.address,
-            )?;
-            response = response.add_message(marker_transfer);
-        };
-    }
+    let response = if total_capital > 0 {
+        match state.required_capital_attribute {
+            None => {
+                let send_capital = BankMsg::Send {
+                    to_address: to.unwrap_or(info.sender).into_string(),
+                    amount: coins(abs_capital.into(), state.capital_denom),
+                };
+                response.add_message(send_capital)
+            }
+            Some(required_capital_attribute) => {
+                let to_addr = to.unwrap_or(info.sender);
+                if !query_attributes(deps, &to_addr)
+                    .any(|attr| attr.name == required_capital_attribute)
+                {
+                    return contract_error(
+                        format!(
+                            "{} does not have required attribute of {}",
+                            &to_addr, &required_capital_attribute
+                        )
+                        .as_str(),
+                    );
+                }
+
+                let marker_transfer = transfer_marker_coins(
+                    abs_capital.into(),
+                    &state.capital_denom,
+                    to_addr,
+                    env.contract.address,
+                )?;
+                response.add_message(marker_transfer)
+            }
+        }
+    } else {
+        response
+    };
 
     Ok(match memo {
         Some(memo) => response.add_attribute(String::from("memo"), memo),
         None => response,
     })
+}
+
+fn query_attributes(
+    deps: DepsMut<ProvenanceQuery>,
+    address: &Addr,
+) -> IntoIter<provwasm_std::Attribute> {
+    ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(address.clone(), None as Option<String>)
+        .unwrap()
+        .attributes
+        .into_iter()
 }
 
 #[cfg(test)]
@@ -508,6 +536,8 @@ pub mod tests {
     #[test]
     fn complete_asset_exchange_with_restricted_marker() {
         let mut deps = restricted_capital_coin_deps(None);
+        deps.querier
+            .with_attributes("destination", &[("capital.test", "", "")]);
         load_markers(&mut deps.querier);
         {
             asset_exchange_storage(&mut deps.storage)

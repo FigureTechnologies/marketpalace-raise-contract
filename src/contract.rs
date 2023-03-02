@@ -4,9 +4,10 @@ use cosmwasm_std::{
     coins, entry_point, Addr, Attribute, BankMsg, DepsMut, Env, Event, MessageInfo, Reply,
     Response, SubMsgResult,
 };
-use provwasm_std::ProvenanceQuery;
-use provwasm_std::{transfer_marker_coins, MarkerType, ProvenanceMsg, ProvenanceQuerier};
+use provwasm_std::{transfer_marker_coins, ProvenanceMsg};
+use provwasm_std::{ProvenanceQuerier, ProvenanceQuery};
 use serde::Serialize;
+use std::vec::IntoIter;
 
 use crate::error::contract_error;
 use crate::error::ContractError;
@@ -147,31 +148,55 @@ pub fn execute(
                 None => vec![],
             };
 
-            let capital_marker =
-                ProvenanceQuerier::new(&deps.querier).get_marker_by_denom(&state.capital_denom)?;
-            let response = if capital_marker.marker_type == MarkerType::Coin {
-                let bank_send = BankMsg::Send {
-                    to_address: to.to_string(),
-                    amount: coins(amount as u128, &state.capital_denom),
-                };
-                Response::new()
-                    .add_message(bank_send)
-                    .add_attributes(attributes)
-            } else {
-                let marker_transfer = transfer_marker_coins(
-                    amount as u128,
-                    &state.capital_denom,
-                    to,
-                    env.contract.address,
-                )?;
-                Response::new()
-                    .add_message(marker_transfer)
-                    .add_attributes(attributes)
+            let response = match state.required_capital_attribute {
+                None => {
+                    let bank_send = BankMsg::Send {
+                        to_address: to.to_string(),
+                        amount: coins(amount as u128, &state.capital_denom),
+                    };
+                    Response::new()
+                        .add_message(bank_send)
+                        .add_attributes(attributes)
+                }
+                Some(required_capital_attribute) => {
+                    if !query_attributes(deps, &to)
+                        .any(|attr| attr.name == required_capital_attribute)
+                    {
+                        return contract_error(
+                            format!(
+                                "{} does not have required attribute of {}",
+                                &to, &required_capital_attribute
+                            )
+                            .as_str(),
+                        );
+                    }
+
+                    let marker_transfer = transfer_marker_coins(
+                        amount as u128,
+                        &state.capital_denom,
+                        to,
+                        env.contract.address,
+                    )?;
+                    Response::new()
+                        .add_message(marker_transfer)
+                        .add_attributes(attributes)
+                }
             };
 
             Ok(response)
         }
     }
+}
+
+fn query_attributes(
+    deps: DepsMut<ProvenanceQuery>,
+    address: &Addr,
+) -> IntoIter<provwasm_std::Attribute> {
+    ProvenanceQuerier::new(&deps.querier)
+        .get_attributes(address.clone(), None as Option<String>)
+        .unwrap()
+        .attributes
+        .into_iter()
 }
 
 #[cfg(test)]
@@ -202,6 +227,7 @@ pub mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("capital_coin"),
                 capital_per_share: 100,
+                required_capital_attribute: None,
             }
         }
 
@@ -215,6 +241,7 @@ pub mod tests {
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("restricted_capital_coin"),
                 capital_per_share: 100,
+                required_capital_attribute: Some(String::from("capital.test")),
             }
         }
     }
@@ -409,6 +436,8 @@ pub mod tests {
     #[test]
     fn issue_restricted_coin_withdrawal() {
         let mut deps = restricted_capital_coin_deps(None);
+        deps.querier
+            .with_attributes("omni", &[("capital.test", "", "")]);
         load_markers(&mut deps.querier);
 
         let res = execute(
