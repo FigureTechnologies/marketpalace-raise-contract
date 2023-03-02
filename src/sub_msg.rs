@@ -12,7 +12,6 @@ pub struct SubInstantiateMsg {
     pub capital_denom: String,
     pub capital_per_share: u64,
     pub initial_commitment: Option<u64>,
-    pub fiat_deposit_addr: Option<Addr>,
 }
 
 #[derive(Serialize)]
@@ -30,5 +29,4 @@ pub struct SubState {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
-    pub fiat_deposit_addr: Option<Addr>,
 }

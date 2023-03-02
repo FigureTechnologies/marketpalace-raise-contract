@@ -36,7 +36,6 @@ pub fn try_propose_subscription(
                 capital_denom: state.capital_denom,
                 capital_per_share: state.capital_per_share,
                 initial_commitment,
-                fiat_deposit_addr: state.fiat_deposit_addr,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -272,7 +271,6 @@ mod tests {
                     investment_denom: String::from("raise_1.investment"),
                     capital_denom: String::from("stable_coin"),
                     capital_per_share: 1,
-                    fiat_deposit_addr: None,
                 })
                 .unwrap(),
             ))
@@ -309,7 +307,6 @@ mod tests {
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                fiat_deposit_addr: None,
             },
             msg
         );
@@ -356,7 +353,6 @@ mod tests {
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                fiat_deposit_addr: None,
             },
             msg
         );
