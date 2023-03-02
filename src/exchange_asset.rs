@@ -117,11 +117,11 @@ pub fn try_complete_asset_exchange(
         }
     }
 
-    let response = Response::new();
+    let mut response = Response::new();
 
     let total_investment: i64 = exchanges.iter().filter_map(|e| e.investment).sum();
     let abs_investment = total_investment.unsigned_abs();
-    let response = match total_investment.cmp(&0) {
+    match total_investment.cmp(&0) {
         Ordering::Less => {
             let investment_marker = ProvenanceQuerier::new(&deps.querier)
                 .get_marker_by_denom(state.investment_denom.clone())?;
@@ -132,9 +132,9 @@ pub fn try_complete_asset_exchange(
             let burn_investment =
                 burn_marker_supply(abs_investment.into(), state.investment_denom.clone())?;
 
-            response
+            response = response
                 .add_message(deposit_investment)
-                .add_message(burn_investment)
+                .add_message(burn_investment);
         }
         Ordering::Greater => {
             let mint_investment =
@@ -146,19 +146,19 @@ pub fn try_complete_asset_exchange(
                 info.sender.clone(),
             )?;
 
-            response
+            response = response
                 .add_message(mint_investment)
-                .add_message(withdraw_investment)
+                .add_message(withdraw_investment);
         }
-        _ => response,
-    };
+        _ => {}
+    }
 
     let total_commitment: i64 = exchanges
         .iter()
         .filter_map(|e| e.commitment_in_shares)
         .sum();
     let abs_commitment = total_commitment.unsigned_abs();
-    let response = match total_commitment.cmp(&0) {
+    match total_commitment.cmp(&0) {
         Ordering::Less => {
             let deposit_commitment = BankMsg::Send {
                 to_address: ProvenanceQuerier::new(&deps.querier)
@@ -170,9 +170,9 @@ pub fn try_complete_asset_exchange(
             let burn_commitment =
                 burn_marker_supply(abs_commitment.into(), state.commitment_denom)?;
 
-            response
+            response = response
                 .add_message(deposit_commitment)
-                .add_message(burn_commitment)
+                .add_message(burn_commitment);
         }
         Ordering::Greater => {
             let mint_commitment =
@@ -184,16 +184,16 @@ pub fn try_complete_asset_exchange(
                 info.sender.clone(),
             )?;
 
-            response
+            response = response
                 .add_message(mint_commitment)
-                .add_message(withdraw_commitment)
+                .add_message(withdraw_commitment);
         }
-        _ => response,
-    };
+        _ => {}
+    }
 
     let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
     let abs_capital = total_capital.unsigned_abs();
-    let response = if total_capital > 0 {
+    if total_capital > 0 {
         match state.fiat_deposit_addr {
             Some(fiat_deposit_addr) => {
                 let fiat_deposit_transfer = wasm_execute(
@@ -204,18 +204,16 @@ pub fn try_complete_asset_exchange(
                     },
                     vec![],
                 )?;
-                response.add_message(fiat_deposit_transfer)
+                response = response.add_message(fiat_deposit_transfer)
             }
             None => {
                 let send_capital = BankMsg::Send {
                     to_address: to.unwrap_or(info.sender).into_string(),
                     amount: coins(abs_capital.into(), state.capital_denom),
                 };
-                response.add_message(send_capital)
+                response = response.add_message(send_capital)
             }
-        }
-    } else {
-        response
+        };
     };
 
     Ok(match memo {
