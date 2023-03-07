@@ -1,0 +1,14 @@
+schema-version: v2
+dd-service: marketpalace-raise-contract
+team: dfs
+contacts:
+- type: slack
+  contact: https://figure-group.slack.com/archives/C01F4UJQ7D2
+repos:
+- name: GitHub Repo
+  provider: github
+  url: https://github.com/FigureTechnologies/marketpalace-raise-contract
+docs:
+- name: GitHub Team
+  provider: github
+  url: https://github.com/orgs/FigureTechnologies/teams/dfs/members
