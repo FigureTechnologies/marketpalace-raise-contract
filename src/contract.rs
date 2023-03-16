@@ -97,6 +97,21 @@ pub fn execute(
 
             Ok(Response::default())
         }
+        HandleMsg::UpdateCapitalDenomination {
+            capital_denomination,
+        } => {
+            let mut state = config(deps.storage).load()?;
+
+            if info.sender != state.recovery_admin {
+                return contract_error("only admin can update capital denomination");
+            }
+
+            state.capital_denom = capital_denomination;
+
+            config(deps.storage).save(&state)?;
+
+            Ok(Response::default())
+        }
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
 
@@ -388,6 +403,25 @@ pub mod tests {
         // verify that gp has been updated
         let state = config_read(&deps.storage).load().unwrap();
         assert_eq!(0, state.required_attestations.len());
+    }
+
+    #[test]
+    fn update_capital_denomination() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &vec![]),
+            HandleMsg::UpdateCapitalDenomination {
+                capital_denomination: String::from("new_denom"),
+            },
+        )
+        .unwrap();
+
+        // verify that denom has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!(String::from("new_denom"), state.capital_denom);
     }
 
     #[test]

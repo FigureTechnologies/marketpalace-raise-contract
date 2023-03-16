@@ -31,6 +31,9 @@ pub enum HandleMsg {
     UpdateRequiredAttestations {
         required_attestations: Vec<HashSet<String>>,
     },
+    UpdateCapitalDenomination {
+        capital_denomination: String,
+    },
     MigrateSubscriptions {
         subscriptions: HashSet<Addr>,
     },
