@@ -52,46 +52,6 @@
     {
       "type": "object",
       "required": [
-        "update_capital_denomination"
-      ],
-      "properties": {
-        "update_capital_denomination": {
-          "type": "object",
-          "required": [
-            "capital_denomination"
-          ],
-          "properties": {
-            "capital_denomination": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "update_required_capital_attribute"
-      ],
-      "properties": {
-        "update_required_capital_attribute": {
-          "type": "object",
-          "required": [
-            "required_capital_attribute"
-          ],
-          "properties": {
-            "required_capital_attribute": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
         "migrate_subscriptions"
       ],
       "properties": {
