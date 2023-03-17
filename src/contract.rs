@@ -14,7 +14,7 @@ use crate::error::ContractError;
 use crate::exchange_asset::try_cancel_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
-use crate::msg::HandleMsg;
+use crate::msg::{HandleMsg, SubscriptionMigrateMsg};
 use crate::state::config;
 use crate::state::eligible_subscriptions;
 use crate::state::pending_subscriptions;
@@ -99,12 +99,15 @@ pub fn execute(
         }
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
-
+            let migration_msg = SubscriptionMigrateMsg {
+                required_capital_attribute: state.required_capital_attribute,
+                capital_denom: Some(state.capital_denom),
+            };
             Ok(
                 Response::new().add_messages(subscriptions.iter().map(|sub| WasmMsg::Migrate {
                     contract_addr: sub.to_string(),
                     new_code_id: state.subscription_code_id,
-                    msg: to_binary(&EmptyArgs {}).unwrap(),
+                    msg: to_binary(&migration_msg).unwrap(),
                 })),
             )
         }

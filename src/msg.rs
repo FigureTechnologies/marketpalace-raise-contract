@@ -26,6 +26,13 @@ pub struct MigrateMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub struct SubscriptionMigrateMsg {
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
     Recover {
         gp: Addr,
