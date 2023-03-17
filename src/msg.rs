@@ -20,6 +20,8 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -30,12 +32,6 @@ pub enum HandleMsg {
     },
     UpdateRequiredAttestations {
         required_attestations: Vec<HashSet<String>>,
-    },
-    UpdateCapitalDenomination {
-        capital_denomination: String,
-    },
-    UpdateRequiredCapitalAttribute {
-        required_capital_attribute: String,
     },
     MigrateSubscriptions {
         subscriptions: HashSet<Addr>,

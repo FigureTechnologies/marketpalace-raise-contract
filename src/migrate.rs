@@ -22,11 +22,19 @@ use serde::Serialize;
 struct EmptyArgs {}
 
 #[entry_point]
-pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, _: MigrateMsg) -> ContractResponse {
+pub fn migrate(
+    deps: DepsMut<ProvenanceQuery>,
+    _: Env,
+    migrate_msg: MigrateMsg,
+) -> ContractResponse {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let old_state: StateV2_0_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
 
+    let capital_denom = match migrate_msg.capital_denom {
+        None => old_state.capital_denom,
+        Some(capital_denom) => capital_denom,
+    };
     let new_state = State {
         subscription_code_id: old_state.subscription_code_id,
         recovery_admin: old_state.recovery_admin,
@@ -34,9 +42,9 @@ pub fn migrate(deps: DepsMut<ProvenanceQuery>, _: Env, _: MigrateMsg) -> Contrac
         required_attestations: vec![old_state.acceptable_accreditations],
         commitment_denom: old_state.commitment_denom,
         investment_denom: old_state.investment_denom,
-        capital_denom: old_state.capital_denom,
+        capital_denom,
         capital_per_share: old_state.capital_per_share,
-        required_capital_attribute: None,
+        required_capital_attribute: migrate_msg.required_capital_attribute,
     };
 
     config(deps.storage).save(&new_state)?;
