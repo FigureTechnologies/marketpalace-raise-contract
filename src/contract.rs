@@ -112,6 +112,21 @@ pub fn execute(
 
             Ok(Response::default())
         }
+        HandleMsg::UpdateRequiredCapitalAttribute {
+            required_capital_attribute,
+        } => {
+            let mut state = config(deps.storage).load()?;
+
+            if info.sender != state.recovery_admin {
+                return contract_error("only admin can update required capital attribute");
+            }
+
+            state.required_capital_attribute = Some(required_capital_attribute);
+
+            config(deps.storage).save(&state)?;
+
+            Ok(Response::default())
+        }
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
 
@@ -422,6 +437,28 @@ pub mod tests {
         // verify that denom has been updated
         let state = config_read(&deps.storage).load().unwrap();
         assert_eq!(String::from("new_denom"), state.capital_denom);
+    }
+
+    #[test]
+    fn update_required_capital_attribute() {
+        let mut deps = default_deps(None);
+
+        execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("marketpalace", &vec![]),
+            HandleMsg::UpdateRequiredCapitalAttribute {
+                required_capital_attribute: String::from("required_attr"),
+            },
+        )
+        .unwrap();
+
+        // verify that attribute has been updated
+        let state = config_read(&deps.storage).load().unwrap();
+        assert_eq!(
+            Some(String::from("required_attr")),
+            state.required_capital_attribute
+        );
     }
 
     #[test]

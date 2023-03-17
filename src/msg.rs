@@ -34,6 +34,9 @@ pub enum HandleMsg {
     UpdateCapitalDenomination {
         capital_denomination: String,
     },
+    UpdateRequiredCapitalAttribute {
+        required_capital_attribute: String,
+    },
     MigrateSubscriptions {
         subscriptions: HashSet<Addr>,
     },
