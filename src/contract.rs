@@ -100,8 +100,8 @@ pub fn execute(
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
             let migration_msg = SubscriptionMigrateMsg {
-                required_capital_attribute: state.required_capital_attribute,
-                capital_denom: Some(state.capital_denom),
+                required_capital_attribute: state.required_capital_attribute.clone(),
+                capital_denom: Some(state.capital_denom.clone()),
             };
             Ok(
                 Response::new().add_messages(subscriptions.iter().map(|sub| WasmMsg::Migrate {
