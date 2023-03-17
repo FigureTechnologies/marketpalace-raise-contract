@@ -72,15 +72,20 @@ pub fn try_close_subscriptions(
     for subscription in subscriptions {
         if !pending.remove(&subscription) && !eligible.remove(&subscription) {
             if accepted.contains(&subscription) {
-                let remaining_commitment = deps
-                    .querier
-                    .query_balance(subscription.as_str(), state.commitment_denom.clone())
-                    .map(|coin| coin.amount.u128())?;
-                if remaining_commitment == 0 {
+                let balances = deps.querier.query_all_balances(subscription.as_str())?;
+                if balances
+                    .iter()
+                    .any(|coin| coin.denom == state.commitment_denom && coin.amount.u128() > 0)
+                {
+                    return contract_error("sub still has remaining commitment");
+                } else if balances
+                    .iter()
+                    .any(|coin| coin.denom == state.investment_denom && coin.amount.u128() > 0)
+                {
+                    return contract_error("sub still has remaining investment");
+                } else {
                     accepted.remove(&subscription);
                     asset_exchange_storage(deps.storage).remove(subscription.as_bytes());
-                } else {
-                    return contract_error("sub still has remaining commitment");
                 }
             } else {
                 return contract_error("no subscription pending or accepted to close");
@@ -477,6 +482,31 @@ mod tests {
         deps.querier
             .base
             .update_balance(Addr::unchecked("sub_1"), coins(100, "commitment_coin"));
+
+        // close sub as gp
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &[]),
+            HandleMsg::CloseSubscriptions {
+                subscriptions: to_addresses(vec!["sub_1"]),
+            },
+        );
+
+        // verify error
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn close_subscriptions_accepted_investment() {
+        let mut deps = default_deps(None);
+        config(&mut deps.storage)
+            .save(&&State::test_default())
+            .unwrap();
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
+        deps.querier
+            .base
+            .update_balance(Addr::unchecked("sub_1"), coins(100, "investment_coin"));
 
         // close sub as gp
         let res = execute(

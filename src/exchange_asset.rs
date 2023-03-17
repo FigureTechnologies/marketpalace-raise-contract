@@ -100,8 +100,6 @@ pub fn try_complete_asset_exchange(
             .ok_or("no asset exchange found for subcription")?;
         existing.remove(index);
 
-        storage.save(info.sender.as_bytes(), &existing)?;
-
         if let Some(date) = &exchange.date {
             match date {
                 ExchangeDate::Due(epoch_seconds) => {
@@ -117,6 +115,7 @@ pub fn try_complete_asset_exchange(
             }
         }
     }
+    storage.save(info.sender.as_bytes(), &existing)?;
 
     let response = Response::new();
 
