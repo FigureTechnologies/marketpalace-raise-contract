@@ -20,6 +20,15 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct SubscriptionMigrateMsg {
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
