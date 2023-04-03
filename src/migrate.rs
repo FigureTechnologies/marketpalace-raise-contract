@@ -36,7 +36,7 @@ pub fn migrate(
         Some(capital_denom) => capital_denom,
     };
     let new_state = State {
-        subscription_code_id: old_state.subscription_code_id,
+        subscription_code_id: migrate_msg.subscription_code_id,
         recovery_admin: old_state.recovery_admin,
         gp: old_state.gp,
         required_attestations: vec![old_state.acceptable_accreditations],
