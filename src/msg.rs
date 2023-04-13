@@ -10,16 +10,25 @@ use crate::state::State;
 pub struct InstantiateMsg {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
-    pub acceptable_accreditations: HashSet<String>,
+    pub required_attestations: Vec<HashSet<String>>,
     pub capital_denom: String,
     pub capital_per_share: u64,
+    pub required_capital_attribute: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
-    pub asset_exchanges: Vec<IssueAssetExchange>,
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct SubscriptionMigrateMsg {
+    pub capital_denom: Option<String>,
+    pub required_capital_attribute: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -27,6 +36,9 @@ pub struct MigrateMsg {
 pub enum HandleMsg {
     Recover {
         gp: Addr,
+    },
+    UpdateRequiredAttestations {
+        required_attestations: Vec<HashSet<String>>,
     },
     MigrateSubscriptions {
         subscriptions: HashSet<Addr>,
@@ -48,6 +60,9 @@ pub enum HandleMsg {
         to: Option<Addr>,
         memo: Option<String>,
     },
+    UpdateEligibleSubscriptions {
+        subscriptions: Vec<Addr>,
+    },
     AcceptSubscriptions {
         subscriptions: Vec<AcceptSubscription>,
     },
@@ -67,7 +82,7 @@ pub struct AcceptSubscription {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct IssueAssetExchange {
     pub subscription: Addr,
-    pub exchange: AssetExchange,
+    pub exchanges: Vec<AssetExchange>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

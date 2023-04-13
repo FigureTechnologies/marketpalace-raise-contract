@@ -3,23 +3,16 @@
   "title": "State",
   "type": "object",
   "required": [
-    "acceptable_accreditations",
     "capital_denom",
     "capital_per_share",
     "commitment_denom",
     "gp",
     "investment_denom",
     "recovery_admin",
+    "required_attestations",
     "subscription_code_id"
   ],
   "properties": {
-    "acceptable_accreditations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "uniqueItems": true
-    },
     "capital_denom": {
       "type": "string"
     },
@@ -39,6 +32,22 @@
     },
     "recovery_admin": {
       "$ref": "#/definitions/Addr"
+    },
+    "required_attestations": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      }
+    },
+    "required_capital_attribute": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "subscription_code_id": {
       "type": "integer",

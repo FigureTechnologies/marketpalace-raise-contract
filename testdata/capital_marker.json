@@ -1,0 +1,30 @@
+{
+    "address": "tp1v5st64kzeuddsqkderddprpkg5upce4xuwdhdl",
+    "coins": [
+      {
+        "denom": "capital_coin",
+        "amount": "420"
+      }
+    ],
+    "public_key": "",
+    "account_number": 10,
+    "sequence": 0,
+    "permissions": [
+      {
+        "permissions": [
+          "burn",
+          "delete",
+          "deposit",
+          "admin",
+          "mint",
+          "withdraw"
+        ],
+        "address": "tp1v5st64kzeuddsqkderddprpkg5upce4xuwdhdl"
+      }
+    ],
+    "status": "active",
+    "denom": "capital_coin",
+    "total_supply": "420",
+    "marker_type": "coin",
+    "supply_fixed": false
+  }

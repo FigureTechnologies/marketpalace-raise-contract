@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::BankMsg;
 use cosmwasm_std::CosmosMsg;
@@ -8,14 +10,12 @@ use cosmwasm_std::{
     from_slice, Binary, Coin, ContractResult, OwnedDeps, Querier, QueryRequest, SystemError,
     SystemResult, WasmQuery,
 };
+use provwasm_mocks::{must_read_binary_file, ProvenanceMockQuerier};
 use provwasm_std::ProvenanceMsg;
 use provwasm_std::ProvenanceMsgParams;
+use provwasm_std::ProvenanceQuery;
 use provwasm_std::{Marker, MarkerMsgParams};
 use serde::de::DeserializeOwned;
-use std::marker::PhantomData;
-
-use provwasm_mocks::{must_read_binary_file, ProvenanceMockQuerier};
-use provwasm_std::ProvenanceQuery;
 
 pub type MockWasmSmartHandler = fn(String, Binary) -> SystemResult<ContractResult<Binary>>;
 pub type MockBankBalanceHandler = fn(String, String) -> SystemResult<ContractResult<Binary>>;
@@ -87,6 +87,27 @@ pub fn marker_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
     if let CosmosMsg::Custom(msg) = msg {
         if let ProvenanceMsgParams::Marker(params) = &msg.params {
             params
+        } else {
+            panic!("not a marker message!")
+        }
+    } else {
+        panic!("not a cosmos custom message!")
+    }
+}
+
+pub fn marker_transfer_msg(msg: &CosmosMsg<ProvenanceMsg>) -> &MarkerMsgParams {
+    if let CosmosMsg::Custom(msg) = msg {
+        if let ProvenanceMsgParams::Marker(params) = &msg.params {
+            if let MarkerMsgParams::TransferMarkerCoins {
+                coin: _,
+                to: _,
+                from: _,
+            } = params
+            {
+                params
+            } else {
+                panic!("not a marker transfer message!")
+            }
         } else {
             panic!("not a marker message!")
         }
@@ -170,5 +191,10 @@ pub fn load_markers(querier: &mut ProvenanceMockQuerier) {
         from_binary(&bin).unwrap()
     };
 
-    querier.with_markers(vec![get_marker("commitment"), get_marker("investment")]);
+    querier.with_markers(vec![
+        get_marker("commitment"),
+        get_marker("investment"),
+        get_marker("capital"),
+        get_marker("restricted_capital"),
+    ]);
 }

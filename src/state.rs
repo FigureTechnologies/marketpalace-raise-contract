@@ -23,11 +23,12 @@ pub struct State {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
     pub gp: Addr,
-    pub acceptable_accreditations: HashSet<String>,
+    pub required_attestations: Vec<HashSet<String>>,
     pub commitment_denom: String,
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
+    pub required_capital_attribute: Option<String>,
 }
 
 impl State {
@@ -92,11 +93,12 @@ pub mod tests {
                 subscription_code_id: 100,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 gp: Addr::unchecked("gp"),
-                acceptable_accreditations: vec![String::from("506c")].into_iter().collect(),
+                required_attestations: vec![vec![String::from("506c")].into_iter().collect()],
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
+                required_capital_attribute: None,
             }
         }
     }

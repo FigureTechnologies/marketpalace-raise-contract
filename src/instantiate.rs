@@ -27,11 +27,12 @@ pub fn instantiate(
         subscription_code_id: msg.subscription_code_id,
         recovery_admin: msg.recovery_admin,
         gp: info.sender,
-        acceptable_accreditations: msg.acceptable_accreditations,
+        required_attestations: msg.required_attestations,
         commitment_denom: format!("{}.commitment", env.contract.address),
         investment_denom: format!("{}.investment", env.contract.address),
         capital_denom: msg.capital_denom,
         capital_per_share: msg.capital_per_share,
+        required_capital_attribute: msg.required_capital_attribute,
     };
 
     config(deps.storage).save(&state)?;
@@ -61,8 +62,6 @@ pub fn instantiate(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
@@ -89,9 +88,10 @@ mod tests {
             InstantiateMsg {
                 subscription_code_id: 0,
                 recovery_admin: Addr::unchecked("marketpalace"),
-                acceptable_accreditations: HashSet::new(),
+                required_attestations: vec![],
                 capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
+                required_capital_attribute: None,
             },
         )
         .unwrap();
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(0, state.general.subscription_code_id);
         assert_eq!("marketpalace", state.general.recovery_admin);
         assert_eq!("gp", state.general.gp);
-        assert_eq!(0, state.general.acceptable_accreditations.len());
+        assert_eq!(0, state.general.required_attestations.len());
         assert_eq!(
             format!("{}.commitment", MOCK_CONTRACT_ADDR),
             state.general.commitment_denom
