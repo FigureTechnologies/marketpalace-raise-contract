@@ -30,7 +30,7 @@ pub fn migrate(
     let contract_info = get_contract_version(deps.storage)?;
 
     match contract_info.version.as_str() {
-        "2.2.0" => {
+        "2.2.0" | "2.1.0" => {
             let old_state: State = singleton_read(deps.storage, CONFIG_KEY).load()?;
             let capital_denom = match migrate_msg.capital_denom {
                 None => old_state.capital_denom,
@@ -149,6 +149,51 @@ mod tests {
     fn migration_2_2_0() {
         let mut deps = mock_dependencies(&[]);
         set_contract_version(&mut deps.storage, "TEST", "2.2.0").unwrap();
+        singleton(&mut deps.storage, CONFIG_KEY)
+            .save(&State {
+                subscription_code_id: 1,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                required_attestations: vec![HashSet::from(["506c".to_string()])],
+                gp: Addr::unchecked("gp"),
+                commitment_denom: String::from("commitment"),
+                investment_denom: String::from("investment"),
+                capital_denom: String::from("stable_coin"),
+                capital_per_share: 100,
+                required_capital_attribute: None,
+            })
+            .unwrap();
+
+        migrate(
+            deps.as_mut(),
+            mock_env(),
+            MigrateMsg {
+                subscription_code_id: 2,
+                capital_denom: None,
+                required_capital_attribute: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            State {
+                subscription_code_id: 2,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                required_attestations: vec![HashSet::from(["506c".to_string()])],
+                gp: Addr::unchecked("gp"),
+                commitment_denom: String::from("commitment"),
+                investment_denom: String::from("investment"),
+                capital_denom: String::from("stable_coin"),
+                capital_per_share: 100,
+                required_capital_attribute: None,
+            },
+            singleton_read(&deps.storage, CONFIG_KEY).load().unwrap()
+        );
+    }
+
+    #[test]
+    fn migration_2_1_0() {
+        let mut deps = mock_dependencies(&[]);
+        set_contract_version(&mut deps.storage, "TEST", "2.1.0").unwrap();
         singleton(&mut deps.storage, CONFIG_KEY)
             .save(&State {
                 subscription_code_id: 1,
