@@ -431,7 +431,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
-                capital_denom: String::from("stable_coin"),
+                capital_denom: String::from("capital_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
@@ -458,7 +458,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
-                capital_denom: String::from("stable_coin"),
+                capital_denom: String::from("restricted_capital_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,

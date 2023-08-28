@@ -213,7 +213,7 @@ pub fn try_complete_asset_exchange(
                     None => {
                         let send_capital = BankMsg::Send {
                             to_address: to.clone().unwrap_or(info.sender.clone()).into_string(),
-                            amount: coins(abs_capital.into(), capital_denom.clone()),
+                            amount: coins(abs_capital.into(), capital_denom),
                         };
                         Ok(response.add_message(send_capital))
                     }
@@ -294,7 +294,7 @@ pub mod tests {
         };
         let as_bytes = to_binary(&exchange).unwrap();
         println!("{}", std::str::from_utf8(as_bytes.as_slice()).unwrap());
-        assert_eq!(41, as_bytes.len());
+        assert_eq!(63, as_bytes.len());
 
         println!("{:?}", from_binary::<AssetExchange>(&as_bytes).unwrap());
     }
@@ -480,14 +480,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("stable_coin"),
+                            capital_denom: String::from("capital_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("stable_coin"),
+                            capital_denom: String::from("capital_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -505,14 +505,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: String::from("capital_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: String::from("capital_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
@@ -574,14 +574,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("stable_coin"),
+                            capital_denom: String::from("restricted_capital_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("stable_coin"),
+                            capital_denom: String::from("restricted_capital_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -599,14 +599,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: String::from("restricted_capital_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: String::from("restricted_capital_coin"),
                         capital: Some(1_000),
                         date: None,
                     },

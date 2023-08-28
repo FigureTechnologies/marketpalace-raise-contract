@@ -260,6 +260,7 @@
           "type": "object",
           "required": [
             "amount",
+            "capital_denom",
             "to"
           ],
           "properties": {
@@ -267,6 +268,9 @@
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
+            },
+            "capital_denom": {
+              "type": "string"
             },
             "memo": {
               "type": [
@@ -314,6 +318,10 @@
             "null"
           ],
           "format": "int64"
+        },
+        "cap_d": {
+          "default": "",
+          "type": "string"
         },
         "com": {
           "type": [

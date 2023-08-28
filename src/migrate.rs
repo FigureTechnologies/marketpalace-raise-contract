@@ -32,10 +32,6 @@ pub fn migrate(
     match contract_info.version.as_str() {
         "2.2.0" => {
             let old_state: StateV2_2_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
-            let like_capital_denoms = match migrate_msg.capital_denom {
-                None => vec![old_state.capital_denom],
-                Some(capital_denom) => vec![capital_denom],
-            };
             let new_state = State {
                 subscription_code_id: migrate_msg.subscription_code_id,
                 recovery_admin: old_state.recovery_admin,
@@ -43,7 +39,7 @@ pub fn migrate(
                 required_attestations: old_state.required_attestations,
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                like_capital_denoms,
+                like_capital_denoms: migrate_msg.like_capital_denoms,
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -52,10 +48,6 @@ pub fn migrate(
         }
         _ => {
             let old_state: StateV2_0_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
-            let capital_denom = match migrate_msg.capital_denom {
-                None => old_state.capital_denom,
-                Some(capital_denom) => capital_denom,
-            };
             let new_state = State {
                 subscription_code_id: migrate_msg.subscription_code_id,
                 recovery_admin: old_state.recovery_admin,
@@ -63,7 +55,7 @@ pub fn migrate(
                 required_attestations: vec![old_state.acceptable_accreditations],
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                like_capital_denoms: vec![capital_denom],
+                like_capital_denoms: migrate_msg.like_capital_denoms,
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -104,7 +96,7 @@ pub struct StateV2_2_0 {
 
 #[cfg(test)]
 mod tests {
-    use crate::migrate::{migrate, StateV2_0_0};
+    use crate::migrate::{migrate, StateV2_0_0, StateV2_2_0};
     use crate::msg::MigrateMsg;
     use crate::state::{State, CONFIG_KEY};
     use cosmwasm_std::testing::mock_env;
@@ -136,7 +128,7 @@ mod tests {
             mock_env(),
             MigrateMsg {
                 subscription_code_id: 2,
-                capital_denom: None,
+                like_capital_denoms: vec![String::from("stable_coin")],
                 required_capital_attribute: None,
             },
         )
@@ -163,14 +155,14 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
         set_contract_version(&mut deps.storage, "TEST", "2.2.0").unwrap();
         singleton(&mut deps.storage, CONFIG_KEY)
-            .save(&State {
+            .save(&StateV2_2_0 {
                 subscription_code_id: 1,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 required_attestations: vec![HashSet::from(["506c".to_string()])],
                 gp: Addr::unchecked("gp"),
                 commitment_denom: String::from("commitment"),
                 investment_denom: String::from("investment"),
-                like_capital_denoms: vec![String::from("stable_coin")],
+                capital_denom: String::from("stable_coin"),
                 capital_per_share: 100,
                 required_capital_attribute: None,
             })
@@ -181,7 +173,7 @@ mod tests {
             mock_env(),
             MigrateMsg {
                 subscription_code_id: 2,
-                capital_denom: None,
+                like_capital_denoms: vec![String::from("stable_coin")],
                 required_capital_attribute: None,
             },
         )

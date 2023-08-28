@@ -3,19 +3,16 @@
   "title": "State",
   "type": "object",
   "required": [
-    "capital_denom",
     "capital_per_share",
     "commitment_denom",
     "gp",
     "investment_denom",
+    "like_capital_denoms",
     "recovery_admin",
     "required_attestations",
     "subscription_code_id"
   ],
   "properties": {
-    "capital_denom": {
-      "type": "string"
-    },
     "capital_per_share": {
       "type": "integer",
       "format": "uint64",
@@ -29,6 +26,12 @@
     },
     "investment_denom": {
       "type": "string"
+    },
+    "like_capital_denoms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "recovery_admin": {
       "$ref": "#/definitions/Addr"
