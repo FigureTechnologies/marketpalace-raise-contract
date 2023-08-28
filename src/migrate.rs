@@ -31,10 +31,10 @@ pub fn migrate(
 
     match contract_info.version.as_str() {
         "2.2.0" => {
-            let old_state: State = singleton_read(deps.storage, CONFIG_KEY).load()?;
-            let capital_denom = match migrate_msg.capital_denom {
-                None => old_state.capital_denom,
-                Some(capital_denom) => capital_denom,
+            let old_state: StateV2_2_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
+            let like_capital_denoms = match migrate_msg.capital_denom {
+                None => vec![old_state.capital_denom],
+                Some(capital_denom) => vec![capital_denom],
             };
             let new_state = State {
                 subscription_code_id: migrate_msg.subscription_code_id,
@@ -43,7 +43,7 @@ pub fn migrate(
                 required_attestations: old_state.required_attestations,
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                capital_denom,
+                like_capital_denoms,
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -63,7 +63,7 @@ pub fn migrate(
                 required_attestations: vec![old_state.acceptable_accreditations],
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                capital_denom,
+                like_capital_denoms: vec![capital_denom],
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -87,6 +87,19 @@ pub struct StateV2_0_0 {
     pub investment_denom: String,
     pub capital_denom: String,
     pub capital_per_share: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct StateV2_2_0 {
+    pub subscription_code_id: u64,
+    pub recovery_admin: Addr,
+    pub gp: Addr,
+    pub required_attestations: Vec<HashSet<String>>,
+    pub commitment_denom: String,
+    pub investment_denom: String,
+    pub capital_denom: String,
+    pub capital_per_share: u64,
+    pub required_capital_attribute: Option<String>,
 }
 
 #[cfg(test)]
@@ -137,7 +150,7 @@ mod tests {
                 gp: Addr::unchecked("gp"),
                 commitment_denom: String::from("commitment"),
                 investment_denom: String::from("investment"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: None,
             },
@@ -157,7 +170,7 @@ mod tests {
                 gp: Addr::unchecked("gp"),
                 commitment_denom: String::from("commitment"),
                 investment_denom: String::from("investment"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: None,
             })
@@ -182,7 +195,7 @@ mod tests {
                 gp: Addr::unchecked("gp"),
                 commitment_denom: String::from("commitment"),
                 investment_denom: String::from("investment"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: None,
             },

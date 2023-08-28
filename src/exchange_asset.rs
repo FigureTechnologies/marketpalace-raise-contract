@@ -1,5 +1,5 @@
-use std::cmp::Ordering;
 use std::vec::IntoIter;
+use std::{cmp::Ordering, collections::HashMap};
 
 use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
 use provwasm_std::{
@@ -168,7 +168,7 @@ pub fn try_complete_asset_exchange(
                 amount: coins(abs_commitment.into(), state.commitment_denom.clone()),
             };
             let burn_commitment =
-                burn_marker_supply(abs_commitment.into(), state.commitment_denom)?;
+                burn_marker_supply(abs_commitment.into(), &state.commitment_denom)?;
 
             response
                 .add_message(deposit_commitment)
@@ -180,7 +180,7 @@ pub fn try_complete_asset_exchange(
             let withdraw_commitment = withdraw_coins(
                 state.commitment_denom.clone(),
                 abs_commitment.into(),
-                state.commitment_denom,
+                state.commitment_denom.clone(),
                 info.sender.clone(),
             )?;
 
@@ -191,43 +191,60 @@ pub fn try_complete_asset_exchange(
         _ => response,
     };
 
-    let total_capital: i64 = exchanges.iter().filter_map(|e| e.capital).sum();
-    let abs_capital = total_capital.unsigned_abs();
-    let response = if total_capital > 0 {
-        match state.required_capital_attribute {
-            None => {
-                let send_capital = BankMsg::Send {
-                    to_address: to.unwrap_or(info.sender).into_string(),
-                    amount: coins(abs_capital.into(), state.capital_denom),
-                };
-                response.add_message(send_capital)
-            }
-            Some(required_capital_attribute) => {
-                let to_addr = to.unwrap_or(info.sender);
-                if !query_attributes(deps, &to_addr)
-                    .any(|attr| attr.name == required_capital_attribute)
-                {
-                    return contract_error(
-                        format!(
-                            "{} does not have required attribute of {}",
-                            &to_addr, &required_capital_attribute
-                        )
-                        .as_str(),
-                    );
-                }
+    let total_capital_per_denom: HashMap<String, i64> = exchanges.iter().fold(
+        HashMap::new(),
+        |mut acc,
+         AssetExchange {
+             capital_denom,
+             capital,
+             ..
+         }| {
+            *acc.entry(capital_denom.clone()).or_insert(0) += capital.unwrap_or(0);
+            acc
+        },
+    );
 
-                let marker_transfer = transfer_marker_coins(
-                    abs_capital.into(),
-                    &state.capital_denom,
-                    to_addr,
-                    env.contract.address,
-                )?;
-                response.add_message(marker_transfer)
+    let response = total_capital_per_denom.into_iter().try_fold(
+        response,
+        |response, (capital_denom, capital_sum)| {
+            let abs_capital = capital_sum.unsigned_abs();
+            if capital_sum > 0 {
+                match &state.required_capital_attribute {
+                    None => {
+                        let send_capital = BankMsg::Send {
+                            to_address: to.clone().unwrap_or(info.sender.clone()).into_string(),
+                            amount: coins(abs_capital.into(), capital_denom.clone()),
+                        };
+                        Ok(response.add_message(send_capital))
+                    }
+                    Some(required_capital_attribute) => {
+                        let to_addr = to.clone().unwrap_or(info.sender.clone());
+                        if !query_attributes(&deps, &to_addr)
+                            .any(|attr| &attr.name == required_capital_attribute)
+                        {
+                            return contract_error(
+                                format!(
+                                    "{} does not have required attribute of {}",
+                                    &to_addr, &required_capital_attribute
+                                )
+                                .as_str(),
+                            );
+                        }
+
+                        let marker_transfer = transfer_marker_coins(
+                            abs_capital.into(),
+                            &capital_denom,
+                            to_addr,
+                            env.contract.address.clone(),
+                        )?;
+                        Ok(response.add_message(marker_transfer))
+                    }
+                }
+            } else {
+                Ok(response)
             }
-        }
-    } else {
-        response
-    };
+        },
+    )?;
 
     Ok(match memo {
         Some(memo) => response.add_attribute(String::from("memo"), memo),
@@ -236,7 +253,7 @@ pub fn try_complete_asset_exchange(
 }
 
 fn query_attributes(
-    deps: DepsMut<ProvenanceQuery>,
+    deps: &DepsMut<ProvenanceQuery>,
     address: &Addr,
 ) -> IntoIter<provwasm_std::Attribute> {
     ProvenanceQuerier::new(&deps.querier)
@@ -271,6 +288,7 @@ pub mod tests {
         let exchange = AssetExchange {
             investment: Some(-1_000),
             commitment_in_shares: None,
+            capital_denom: String::from("stable_coin"),
             capital: Some(1_000),
             date: Some(ExchangeDate::Available(0)),
         };
@@ -292,6 +310,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: None,
                         commitment_in_shares: Some(1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: None,
                         date: None,
                     }],
@@ -309,6 +328,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -353,6 +373,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -373,6 +394,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -390,6 +412,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -434,6 +457,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -456,12 +480,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
+                            capital_denom: String::from("stable_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
+                            capital_denom: String::from("stable_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -479,12 +505,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
@@ -546,12 +574,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
+                            capital_denom: String::from("stable_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
+                            capital_denom: String::from("stable_coin"),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -569,12 +599,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: None,
                     },
@@ -635,6 +667,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: None,
                     }],
@@ -650,6 +683,7 @@ pub mod tests {
                 exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
+                    capital_denom: String::from("stable_coin"),
                     capital: Some(1_000),
                     date: None,
                 }],
@@ -672,6 +706,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
+                        capital_denom: String::from("stable_coin"),
                         capital: Some(1_000),
                         date: Some(ExchangeDate::Available(1675209600)), // Feb 01 2023 UTC
                     }],
@@ -689,6 +724,7 @@ pub mod tests {
                 exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
+                    capital_denom: String::from("stable_coin"),
                     capital: Some(1_000),
                     date: None,
                 }],

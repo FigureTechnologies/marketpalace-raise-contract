@@ -11,7 +11,7 @@ pub struct InstantiateMsg {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
     pub required_attestations: Vec<HashSet<String>>,
-    pub capital_denom: String,
+    pub like_capital_denoms: Vec<String>,
     pub capital_per_share: u64,
     pub required_capital_attribute: Option<String>,
 }
@@ -27,7 +27,7 @@ pub struct MigrateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SubscriptionMigrateMsg {
-    pub capital_denom: Option<String>,
+    pub like_capital_denoms: Vec<String>,
     pub required_capital_attribute: Option<String>,
 }
 
@@ -67,6 +67,7 @@ pub enum HandleMsg {
         subscriptions: Vec<AcceptSubscription>,
     },
     IssueWithdrawal {
+        capital_denom: String,
         to: Addr,
         amount: u64,
         memo: Option<String>,
@@ -95,6 +96,9 @@ pub struct AssetExchange {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub commitment_in_shares: Option<i64>,
+    #[serde(rename = "cap_d")]
+    #[serde(default)]
+    pub capital_denom: String,
     #[serde(rename = "cap")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]

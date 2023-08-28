@@ -101,7 +101,7 @@ pub fn execute(
             let state = config(deps.storage).load()?;
             let migration_msg = SubscriptionMigrateMsg {
                 required_capital_attribute: state.required_capital_attribute.clone(),
-                capital_denom: Some(state.capital_denom.clone()),
+                like_capital_denoms: state.like_capital_denoms.clone(),
             };
             Ok(
                 Response::new().add_messages(subscriptions.iter().map(|sub| WasmMsg::Migrate {
@@ -134,11 +134,20 @@ pub fn execute(
             to,
             memo,
         } => try_complete_asset_exchange(deps, env, info, exchanges, to, memo),
-        HandleMsg::IssueWithdrawal { to, amount, memo } => {
+        HandleMsg::IssueWithdrawal {
+            capital_denom,
+            to,
+            amount,
+            memo,
+        } => {
             let state = config(deps.storage).load()?;
 
             if info.sender != state.gp {
                 return contract_error("only gp can redeem capital");
+            }
+
+            if !state.like_capital_denoms.contains(&capital_denom) {
+                return contract_error("unsupported capital denom");
             }
 
             let attributes = match memo {
@@ -155,7 +164,7 @@ pub fn execute(
                 None => {
                     let bank_send = BankMsg::Send {
                         to_address: to.to_string(),
-                        amount: coins(amount as u128, &state.capital_denom),
+                        amount: coins(amount as u128, &capital_denom),
                     };
                     Response::new()
                         .add_message(bank_send)
@@ -176,7 +185,7 @@ pub fn execute(
 
                     let marker_transfer = transfer_marker_coins(
                         amount as u128,
-                        &state.capital_denom,
+                        &capital_denom,
                         to,
                         env.contract.address,
                     )?;
@@ -228,7 +237,7 @@ pub mod tests {
                 required_attestations: vec![vec![String::from("506c")].into_iter().collect()],
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
-                capital_denom: String::from("capital_coin"),
+                like_capital_denoms: vec![String::from("capital_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: None,
             }
@@ -242,7 +251,7 @@ pub mod tests {
                 required_attestations: vec![vec![String::from("506c")].into_iter().collect()],
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
-                capital_denom: String::from("restricted_capital_coin"),
+                like_capital_denoms: vec![String::from("restricted_capital_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: Some(String::from("capital.test")),
             }
@@ -422,6 +431,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
+                capital_denom: String::from("stable_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
@@ -448,6 +458,7 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
+                capital_denom: String::from("stable_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
@@ -476,6 +487,7 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &[]),
             HandleMsg::IssueWithdrawal {
+                capital_denom: String::from("stable_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,

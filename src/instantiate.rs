@@ -30,7 +30,7 @@ pub fn instantiate(
         required_attestations: msg.required_attestations,
         commitment_denom: format!("{}.commitment", env.contract.address),
         investment_denom: format!("{}.investment", env.contract.address),
-        capital_denom: msg.capital_denom,
+        like_capital_denoms: msg.like_capital_denoms,
         capital_per_share: msg.capital_per_share,
         required_capital_attribute: msg.required_capital_attribute,
     };
@@ -89,7 +89,7 @@ mod tests {
                 subscription_code_id: 0,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 required_attestations: vec![],
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 required_capital_attribute: None,
             },
@@ -196,7 +196,10 @@ mod tests {
             format!("{}.investment", MOCK_CONTRACT_ADDR),
             state.general.investment_denom
         );
-        assert_eq!("stable_coin", state.general.capital_denom);
+        assert_eq!(
+            "stable_coin",
+            state.general.like_capital_denoms.first().unwrap()
+        );
         assert_eq!(100, state.general.capital_per_share);
     }
 }
