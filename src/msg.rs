@@ -97,8 +97,9 @@ pub struct AssetExchange {
     #[serde(default)]
     pub commitment_in_shares: Option<i64>,
     #[serde(rename = "cap_d")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
-    pub capital_denom: String,
+    pub capital_denom: Option<String>,
     #[serde(rename = "cap")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]

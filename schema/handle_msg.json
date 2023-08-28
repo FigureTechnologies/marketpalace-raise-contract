@@ -320,8 +320,10 @@
           "format": "int64"
         },
         "cap_d": {
-          "default": "",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "com": {
           "type": [

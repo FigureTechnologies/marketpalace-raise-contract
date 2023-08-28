@@ -76,7 +76,7 @@ mod tests {
                     &vec![AssetExchange {
                         investment: None,
                         commitment_in_shares: Some(1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: None,
                         date: None,
                     }],
@@ -97,7 +97,7 @@ mod tests {
                 &vec![AssetExchange {
                     investment: None,
                     commitment_in_shares: Some(1_000),
-                    capital_denom: String::from("stable_coin"),
+                    capital_denom: Some(String::from("stable_coin")),
                     capital: None,
                     date: None,
                 }],

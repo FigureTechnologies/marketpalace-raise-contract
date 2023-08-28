@@ -199,8 +199,12 @@ pub fn try_complete_asset_exchange(
              capital,
              ..
          }| {
-            *acc.entry(capital_denom.clone()).or_insert(0) += capital.unwrap_or(0);
-            acc
+            if let Some(value) = capital {
+                *acc.entry(capital_denom.clone().unwrap()).or_insert(0) += value;
+                acc
+            } else {
+                acc
+            }
         },
     );
 
@@ -288,7 +292,7 @@ pub mod tests {
         let exchange = AssetExchange {
             investment: Some(-1_000),
             commitment_in_shares: None,
-            capital_denom: String::from("stable_coin"),
+            capital_denom: Some(String::from("stable_coin")),
             capital: Some(1_000),
             date: Some(ExchangeDate::Available(0)),
         };
@@ -310,7 +314,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: None,
                         commitment_in_shares: Some(1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: None,
                         date: None,
                     }],
@@ -328,7 +332,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -373,7 +377,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -394,7 +398,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -412,7 +416,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -457,7 +461,7 @@ pub mod tests {
                     exchanges: vec![AssetExchange {
                         investment: Some(1_000),
                         commitment_in_shares: Some(-1_000),
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(-1_000),
                         date: None,
                     }],
@@ -480,14 +484,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("capital_coin"),
+                            capital_denom: Some(String::from("capital_coin")),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("capital_coin"),
+                            capital_denom: Some(String::from("capital_coin")),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -505,14 +509,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("capital_coin"),
+                        capital_denom: Some(String::from("capital_coin")),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("capital_coin"),
+                        capital_denom: Some(String::from("capital_coin")),
                         capital: Some(1_000),
                         date: None,
                     },
@@ -574,14 +578,14 @@ pub mod tests {
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("restricted_capital_coin"),
+                            capital_denom: Some(String::from("restricted_capital_coin")),
                             capital: Some(1_000),
                             date: None,
                         },
                         AssetExchange {
                             investment: Some(-1_000),
                             commitment_in_shares: None,
-                            capital_denom: String::from("restricted_capital_coin"),
+                            capital_denom: Some(String::from("restricted_capital_coin")),
                             capital: Some(1_000),
                             date: None,
                         },
@@ -599,14 +603,14 @@ pub mod tests {
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("restricted_capital_coin"),
+                        capital_denom: Some(String::from("restricted_capital_coin")),
                         capital: Some(1_000),
                         date: None,
                     },
                     AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("restricted_capital_coin"),
+                        capital_denom: Some(String::from("restricted_capital_coin")),
                         capital: Some(1_000),
                         date: None,
                     },
@@ -667,7 +671,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(1_000),
                         date: None,
                     }],
@@ -683,7 +687,7 @@ pub mod tests {
                 exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
-                    capital_denom: String::from("stable_coin"),
+                    capital_denom: Some(String::from("stable_coin")),
                     capital: Some(1_000),
                     date: None,
                 }],
@@ -706,7 +710,7 @@ pub mod tests {
                     &vec![AssetExchange {
                         investment: Some(-1_000),
                         commitment_in_shares: None,
-                        capital_denom: String::from("stable_coin"),
+                        capital_denom: Some(String::from("stable_coin")),
                         capital: Some(1_000),
                         date: Some(ExchangeDate::Available(1675209600)), // Feb 01 2023 UTC
                     }],
@@ -724,7 +728,7 @@ pub mod tests {
                 exchanges: vec![AssetExchange {
                     investment: Some(-1_000),
                     commitment_in_shares: None,
-                    capital_denom: String::from("stable_coin"),
+                    capital_denom: Some(String::from("stable_coin")),
                     capital: Some(1_000),
                     date: None,
                 }],
