@@ -1,7 +1,7 @@
 use std::vec::IntoIter;
 use std::{cmp::Ordering, collections::HashMap};
 
-use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, MessageInfo, Response, StdError};
 use provwasm_std::{
     burn_marker_supply, mint_marker_supply, transfer_marker_coins, withdraw_coins,
     ProvenanceQuerier, ProvenanceQuery,
@@ -191,7 +191,7 @@ pub fn try_complete_asset_exchange(
         _ => response,
     };
 
-    let total_capital_per_denom: HashMap<String, i64> = exchanges.iter().fold(
+    let total_capital_per_denom: HashMap<String, i64> = exchanges.iter().try_fold(
         HashMap::new(),
         |mut acc,
          AssetExchange {
@@ -199,14 +199,21 @@ pub fn try_complete_asset_exchange(
              capital,
              ..
          }| {
-            if let Some(value) = capital {
-                *acc.entry(capital_denom.clone().unwrap()).or_insert(0) += value;
-                acc
-            } else {
-                acc
+            if let Some(capital_value) = capital {
+                let denom = if let Some(denom_value) = capital_denom {
+                    denom_value.clone()
+                } else if state.like_capital_denoms.len() == 1 {
+                    state.like_capital_denoms.first().unwrap().clone()
+                } else {
+                    return Err(StdError::generic_err("no capital denom")) 
+                };
+
+                *acc.entry(denom).or_insert(0) += capital_value;
             }
+
+            Ok(acc)
         },
-    );
+    )?;
 
     let response = total_capital_per_denom.into_iter().try_fold(
         response,
