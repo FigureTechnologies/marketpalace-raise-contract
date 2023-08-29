@@ -3,12 +3,15 @@
   "title": "MigrateMsg",
   "type": "object",
   "required": [
-    "like_capital_denoms",
     "subscription_code_id"
   ],
   "properties": {
     "like_capital_denoms": {
-      "type": "array",
+      "default": null,
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       }

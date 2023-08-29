@@ -20,7 +20,8 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
-    pub like_capital_denoms: Vec<String>,
+    #[serde(default)]
+    pub like_capital_denoms: Option<Vec<String>>,
     pub required_capital_attribute: Option<String>,
 }
 

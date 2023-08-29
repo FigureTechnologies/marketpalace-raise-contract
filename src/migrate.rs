@@ -39,7 +39,9 @@ pub fn migrate(
                 required_attestations: old_state.required_attestations,
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                like_capital_denoms: migrate_msg.like_capital_denoms,
+                like_capital_denoms: migrate_msg
+                    .like_capital_denoms
+                    .unwrap_or(vec![old_state.capital_denom]),
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -55,7 +57,9 @@ pub fn migrate(
                 required_attestations: vec![old_state.acceptable_accreditations],
                 commitment_denom: old_state.commitment_denom,
                 investment_denom: old_state.investment_denom,
-                like_capital_denoms: migrate_msg.like_capital_denoms,
+                like_capital_denoms: migrate_msg
+                    .like_capital_denoms
+                    .unwrap_or(vec![old_state.capital_denom]),
                 capital_per_share: old_state.capital_per_share,
                 required_capital_attribute: migrate_msg.required_capital_attribute,
             };
@@ -128,7 +132,7 @@ mod tests {
             mock_env(),
             MigrateMsg {
                 subscription_code_id: 2,
-                like_capital_denoms: vec![String::from("stable_coin")],
+                like_capital_denoms: Some(vec![String::from("stable_coin")]),
                 required_capital_attribute: None,
             },
         )
@@ -173,7 +177,7 @@ mod tests {
             mock_env(),
             MigrateMsg {
                 subscription_code_id: 2,
-                like_capital_denoms: vec![String::from("stable_coin")],
+                like_capital_denoms: Some(vec![String::from("stable_coin")]),
                 required_capital_attribute: None,
             },
         )
