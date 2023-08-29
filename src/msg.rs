@@ -67,10 +67,10 @@ pub enum HandleMsg {
         subscriptions: Vec<AcceptSubscription>,
     },
     IssueWithdrawal {
-        capital_denom: String,
         to: Addr,
         amount: u64,
         memo: Option<String>,
+        capital_denom: Option<String>,
     },
 }
 

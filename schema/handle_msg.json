@@ -260,7 +260,6 @@
           "type": "object",
           "required": [
             "amount",
-            "capital_denom",
             "to"
           ],
           "properties": {
@@ -270,7 +269,10 @@
               "minimum": 0.0
             },
             "capital_denom": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "memo": {
               "type": [

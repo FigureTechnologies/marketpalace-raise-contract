@@ -135,10 +135,10 @@ pub fn execute(
             memo,
         } => try_complete_asset_exchange(deps, env, info, exchanges, to, memo),
         HandleMsg::IssueWithdrawal {
-            capital_denom,
             to,
             amount,
             memo,
+            capital_denom,
         } => {
             let state = config(deps.storage).load()?;
 
@@ -146,9 +146,17 @@ pub fn execute(
                 return contract_error("only gp can redeem capital");
             }
 
-            if !state.like_capital_denoms.contains(&capital_denom) {
-                return contract_error("unsupported capital denom");
-            }
+            let capital_denom = if let Some(denom_value) = capital_denom {
+                if state.like_capital_denoms.contains(&denom_value) {
+                    denom_value
+                } else {
+                    return contract_error("unsupported capital denom");
+                }
+            } else if state.like_capital_denoms.len() == 1 {
+                state.like_capital_denoms.first().unwrap().clone()
+            } else {
+                return contract_error("no capital denom");
+            };
 
             let attributes = match memo {
                 Some(memo) => {
@@ -431,10 +439,10 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
-                capital_denom: String::from("capital_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
+                capital_denom: None,
             },
         )
         .unwrap();
@@ -458,10 +466,10 @@ pub mod tests {
             mock_env(),
             mock_info("gp", &[]),
             HandleMsg::IssueWithdrawal {
-                capital_denom: String::from("restricted_capital_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
+                capital_denom: None,
             },
         )
         .unwrap();
@@ -487,10 +495,10 @@ pub mod tests {
             mock_env(),
             mock_info("bad_actor", &[]),
             HandleMsg::IssueWithdrawal {
-                capital_denom: String::from("stable_coin"),
                 to: Addr::unchecked("omni"),
                 amount: 10_000,
                 memo: None,
+                capital_denom: None,
             },
         );
         assert!(res.is_err());
