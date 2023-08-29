@@ -1,4 +1,5 @@
 use crate::contract::ContractResponse;
+use crate::error::contract_error;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
 use crate::state::State;
@@ -21,6 +22,10 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> ContractResponse {
+    if msg.like_capital_denoms.is_empty() {
+        return contract_error("at least 1 like capital denom required");
+    }
+
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let state = State {

@@ -29,6 +29,22 @@ pub fn try_issue_asset_exchanges(
         return contract_error("only gp can issue redemptions");
     }
 
+    if state.like_capital_denoms.len() > 1 {
+        for issuance in &asset_exchanges {
+            for exchange in &issuance.exchanges {
+                if exchange.capital.is_some() {
+                    if let Some(denom_value) = &exchange.capital_denom {
+                        if !state.like_capital_denoms.contains(denom_value) {
+                            return contract_error("unsupported capital denom");
+                        }
+                    } else {
+                        return contract_error("specified capital denom required");
+                    }
+                }
+            }
+        }
+    }
+
     for mut issuance in asset_exchanges {
         if !accepted.contains(&issuance.subscription) {
             return contract_error("subscription not accepted");
