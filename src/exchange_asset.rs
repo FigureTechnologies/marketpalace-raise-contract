@@ -205,7 +205,7 @@ pub fn try_complete_asset_exchange(
                 } else if state.like_capital_denoms.len() == 1 {
                     state.like_capital_denoms.first().unwrap().clone()
                 } else {
-                    return Err(StdError::generic_err("no capital denom")) 
+                    return Err(StdError::generic_err("no capital denom"));
                 };
 
                 *acc.entry(denom).or_insert(0) += capital_value;
