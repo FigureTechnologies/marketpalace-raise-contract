@@ -181,7 +181,7 @@ pub fn try_accept_subscriptions(
                         .capital_to_shares(accept.commitment_in_capital)
                         .try_into()?,
                 ),
-                capital_denom: Some(String::from("stable_coin")),
+                capital_denom: None,
                 capital: None,
                 date: None,
             }],
@@ -671,7 +671,7 @@ mod tests {
             &AssetExchange {
                 investment: None,
                 commitment_in_shares: Some(200),
-                capital_denom: Some(String::from("stable_coin")),
+                capital_denom: None,
                 capital: None,
                 date: None,
             },
@@ -720,7 +720,7 @@ mod tests {
             &AssetExchange {
                 investment: None,
                 commitment_in_shares: Some(200),
-                capital_denom: Some(String::from("stable_coin")),
+                capital_denom: None,
                 capital: None,
                 date: None,
             },
