@@ -207,4 +207,25 @@ mod tests {
         );
         assert_eq!(100, state.general.capital_per_share);
     }
+
+    #[test]
+    fn initialization_without_cap_denoms() {
+        let mut deps = mock_dependencies(&[]);
+        let info = mock_info("gp", &[]);
+
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                required_attestations: vec![],
+                like_capital_denoms: vec![],
+                capital_per_share: 100,
+                required_capital_attribute: None,
+            },
+        );
+        assert!(res.is_err());
+    }
 }
