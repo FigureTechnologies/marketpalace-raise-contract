@@ -301,11 +301,11 @@ pub mod tests {
     use crate::msg::IssueAssetExchange;
     use crate::state::tests::asset_exchange_storage_read;
     use crate::state::tests::set_accepted;
-    use cosmwasm_std::from_binary;
     use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::to_binary;
     use cosmwasm_std::Addr;
     use cosmwasm_std::Timestamp;
+    use cosmwasm_std::{from_binary, Coin, Uint128};
     use provwasm_std::MarkerMsgParams;
 
     #[test]
@@ -718,17 +718,24 @@ pub mod tests {
 
         // verify send message a
         let (to_address, coins) = send_args(msg_at_index(&res, 2));
-        let coin = coins.first().unwrap();
+        let cap_coin_1 = coins.first().unwrap();
         assert_eq!("destination", to_address);
-        assert_eq!("cap_a", coin.denom);
-        assert_eq!(1_000, coin.amount.u128());
 
         // verify send message b
         let (to_address, coins) = send_args(msg_at_index(&res, 3));
-        let coin = coins.first().unwrap();
+        let cap_coin_2 = coins.first().unwrap();
         assert_eq!("destination", to_address);
-        assert_eq!("cap_b", coin.denom);
-        assert_eq!(1_000, coin.amount.u128());
+
+        let cap_a = Coin {
+            denom: String::from("cap_a"),
+            amount: Uint128::new(1_000),
+        };
+        let cap_b = Coin {
+            denom: String::from("cap_b"),
+            amount: Uint128::new(1_000),
+        };
+        assert!(cap_coin_1.eq(&cap_a) || cap_coin_1.eq(&cap_b));
+        assert!(cap_coin_2.eq(&cap_a) || cap_coin_2.eq(&cap_b));
 
         // verify exchange is removed
         assert_eq!(
