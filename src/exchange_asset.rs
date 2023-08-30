@@ -29,17 +29,15 @@ pub fn try_issue_asset_exchanges(
         return contract_error("only gp can issue redemptions");
     }
 
-    if state.like_capital_denoms.len() > 1 {
-        for issuance in &asset_exchanges {
-            for exchange in &issuance.exchanges {
-                if exchange.capital.is_some() {
-                    if let Some(denom_value) = &exchange.capital_denom {
-                        if !state.like_capital_denoms.contains(denom_value) {
-                            return contract_error("unsupported capital denom");
-                        }
-                    } else {
-                        return contract_error("specified capital denom required");
+    for issuance in &asset_exchanges {
+        for exchange in &issuance.exchanges {
+            if exchange.capital.is_some() {
+                if let Some(denom_value) = &exchange.capital_denom {
+                    if !state.like_capital_denoms.contains(denom_value) {
+                        return contract_error("unsupported capital denom");
                     }
+                } else if state.like_capital_denoms.len() > 1 {
+                    return contract_error("specified capital denom required");
                 }
             }
         }
@@ -408,6 +406,60 @@ pub mod tests {
             },
         );
 
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn issue_asset_exchange_required_cap_denom_not_specified() {
+        let mut deps = default_deps(Some(|state| {
+            state.like_capital_denoms = vec![String::from("a"), String::from("b")];
+        }));
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::IssueAssetExchanges {
+                asset_exchanges: vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_1"),
+                    exchanges: vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital_denom: None,
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                }],
+            },
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn issue_asset_exchange_unsupported_cap_denom() {
+        let mut deps = default_deps(Some(|state| {
+            state.like_capital_denoms = vec![String::from("a")];
+        }));
+        set_accepted(&mut deps.storage, vec!["sub_1"]);
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("gp", &vec![]),
+            HandleMsg::IssueAssetExchanges {
+                asset_exchanges: vec![IssueAssetExchange {
+                    subscription: Addr::unchecked("sub_1"),
+                    exchanges: vec![AssetExchange {
+                        investment: Some(1_000),
+                        commitment_in_shares: Some(-1_000),
+                        capital_denom: Some(String::from("b")),
+                        capital: Some(-1_000),
+                        date: None,
+                    }],
+                }],
+            },
+        );
         assert!(res.is_err());
     }
 
