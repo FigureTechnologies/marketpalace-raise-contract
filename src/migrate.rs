@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::contract::ContractResponse;
+use crate::error::contract_error;
 use crate::msg::MigrateMsg;
 use crate::state::config;
 use crate::state::State;
@@ -48,7 +49,7 @@ pub fn migrate(
 
             config(deps.storage).save(&new_state)?;
         }
-        _ => {
+        "2.0.0" => {
             let old_state: StateV2_0_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
             let new_state = State {
                 subscription_code_id: migrate_msg.subscription_code_id,
@@ -65,6 +66,9 @@ pub fn migrate(
             };
 
             config(deps.storage).save(&new_state)?;
+        }
+        _ => {
+            return contract_error("existing contract version not supported for migration to 2.3.0")
         }
     };
 
