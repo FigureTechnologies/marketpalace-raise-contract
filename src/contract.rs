@@ -503,4 +503,44 @@ pub mod tests {
         );
         assert!(res.is_err());
     }
+
+    #[test]
+    fn issue_withdrawal_no_required_cap_denom_specified() {
+        let mut deps = default_deps(Some(|state| {
+            state.like_capital_denoms = vec![String::from("a"), String::from("b")]
+        }));
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::IssueWithdrawal {
+                to: Addr::unchecked("omni"),
+                amount: 10_000,
+                memo: None,
+                capital_denom: None,
+            },
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn issue_withdrawal_unsupported_cap_denom() {
+        let mut deps = default_deps(Some(|state| {
+            state.like_capital_denoms = vec![String::from("a")]
+        }));
+
+        let res = execute(
+            deps.as_mut(),
+            mock_env(),
+            mock_info("bad_actor", &[]),
+            HandleMsg::IssueWithdrawal {
+                to: Addr::unchecked("omni"),
+                amount: 10_000,
+                memo: None,
+                capital_denom: Some(String::from("b")),
+            },
+        );
+        assert!(res.is_err());
+    }
 }
