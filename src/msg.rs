@@ -13,7 +13,7 @@ pub struct InstantiateMsg {
     pub required_attestations: Vec<HashSet<String>>,
     pub like_capital_denoms: Vec<String>,
     pub capital_per_share: u64,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -22,14 +22,14 @@ pub struct MigrateMsg {
     pub subscription_code_id: u64,
     #[serde(default)]
     pub like_capital_denoms: Option<Vec<String>>,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Option<Vec<CapitalDenomRequirement>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SubscriptionMigrateMsg {
     pub like_capital_denoms: Vec<String>,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -73,6 +73,12 @@ pub enum HandleMsg {
         memo: Option<String>,
         capital_denom: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct CapitalDenomRequirement {
+    pub capital_denom: String,
+    pub required_attribute: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

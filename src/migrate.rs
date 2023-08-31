@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
+use crate::msg::CapitalDenomRequirement;
 use crate::msg::MigrateMsg;
 use crate::state::config;
 use crate::state::State;
@@ -33,6 +34,17 @@ pub fn migrate(
     match contract_info.version.as_str() {
         "2.2.0" => {
             let old_state: StateV2_2_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
+            let required_capital_attributes =
+                migrate_msg.required_capital_attributes.unwrap_or_else(|| {
+                    if let Some(required_attribute) = &old_state.required_capital_attribute {
+                        vec![CapitalDenomRequirement {
+                            capital_denom: old_state.capital_denom.clone(),
+                            required_attribute: required_attribute.clone(),
+                        }]
+                    } else {
+                        vec![]
+                    }
+                });
             let new_state = State {
                 subscription_code_id: migrate_msg.subscription_code_id,
                 recovery_admin: old_state.recovery_admin,
@@ -44,7 +56,7 @@ pub fn migrate(
                     .like_capital_denoms
                     .unwrap_or(vec![old_state.capital_denom]),
                 capital_per_share: old_state.capital_per_share,
-                required_capital_attribute: migrate_msg.required_capital_attribute,
+                required_capital_attributes,
             };
 
             config(deps.storage).save(&new_state)?;
@@ -62,7 +74,9 @@ pub fn migrate(
                     .like_capital_denoms
                     .unwrap_or(vec![old_state.capital_denom]),
                 capital_per_share: old_state.capital_per_share,
-                required_capital_attribute: migrate_msg.required_capital_attribute,
+                required_capital_attributes: migrate_msg
+                    .required_capital_attributes
+                    .unwrap_or(vec![]),
             };
 
             config(deps.storage).save(&new_state)?;
@@ -112,7 +126,7 @@ mod tests {
     use cosmwasm_storage::{singleton, singleton_read};
     use cw2::set_contract_version;
     use provwasm_mocks::mock_dependencies;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     #[test]
     fn migration() {
@@ -137,7 +151,7 @@ mod tests {
             MigrateMsg {
                 subscription_code_id: 2,
                 like_capital_denoms: Some(vec![String::from("stable_coin")]),
-                required_capital_attribute: None,
+                required_capital_attributes: None,
             },
         )
         .unwrap();
@@ -152,7 +166,7 @@ mod tests {
                 investment_denom: String::from("investment"),
                 like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             singleton_read(&deps.storage, CONFIG_KEY).load().unwrap()
         );
@@ -182,7 +196,7 @@ mod tests {
             MigrateMsg {
                 subscription_code_id: 2,
                 like_capital_denoms: Some(vec![String::from("stable_coin")]),
-                required_capital_attribute: None,
+                required_capital_attributes: None,
             },
         )
         .unwrap();
@@ -197,7 +211,7 @@ mod tests {
                 investment_denom: String::from("investment"),
                 like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             singleton_read(&deps.storage, CONFIG_KEY).load().unwrap()
         );

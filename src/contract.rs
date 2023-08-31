@@ -14,6 +14,7 @@ use crate::error::ContractError;
 use crate::exchange_asset::try_cancel_asset_exchanges;
 use crate::exchange_asset::try_complete_asset_exchange;
 use crate::exchange_asset::try_issue_asset_exchanges;
+use crate::msg::CapitalDenomRequirement;
 use crate::msg::{HandleMsg, SubscriptionMigrateMsg};
 use crate::state::config;
 use crate::state::eligible_subscriptions;
@@ -100,7 +101,7 @@ pub fn execute(
         HandleMsg::MigrateSubscriptions { subscriptions } => {
             let state = config(deps.storage).load()?;
             let migration_msg = SubscriptionMigrateMsg {
-                required_capital_attribute: state.required_capital_attribute.clone(),
+                required_capital_attributes: state.required_capital_attributes.clone(),
                 like_capital_denoms: state.like_capital_denoms.clone(),
             };
             Ok(
@@ -168,7 +169,9 @@ pub fn execute(
                 None => vec![],
             };
 
-            let response = match state.required_capital_attribute {
+            let response = match state.required_capital_attributes.iter().find(
+                |requirement: &&CapitalDenomRequirement| requirement.capital_denom == capital_denom,
+            ) {
                 None => {
                     let bank_send = BankMsg::Send {
                         to_address: to.to_string(),
@@ -178,14 +181,14 @@ pub fn execute(
                         .add_message(bank_send)
                         .add_attributes(attributes)
                 }
-                Some(required_capital_attribute) => {
+                Some(requirement) => {
                     if !query_attributes(deps, &to)
-                        .any(|attr| attr.name == required_capital_attribute)
+                        .any(|attr| attr.name == requirement.required_attribute)
                     {
                         return contract_error(
                             format!(
                                 "{} does not have required attribute of {}",
-                                &to, &required_capital_attribute
+                                &to, &requirement.required_attribute
                             )
                             .as_str(),
                         );
@@ -221,6 +224,8 @@ fn query_attributes(
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::HashMap;
+
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coin, SubMsgResponse};
     use cosmwasm_std::{Addr, OwnedDeps};
@@ -247,7 +252,7 @@ pub mod tests {
                 investment_denom: String::from("investment_coin"),
                 like_capital_denoms: vec![String::from("capital_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             }
         }
 
@@ -261,7 +266,10 @@ pub mod tests {
                 investment_denom: String::from("investment_coin"),
                 like_capital_denoms: vec![String::from("restricted_capital_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: Some(String::from("capital.test")),
+                required_capital_attributes: vec![CapitalDenomRequirement {
+                    capital_denom: String::from("restricted_capital_coin"),
+                    required_attribute: String::from("capital.test"),
+                }],
             }
         }
     }

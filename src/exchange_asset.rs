@@ -234,7 +234,11 @@ pub fn try_complete_asset_exchange(
         |response, (capital_denom, capital_sum)| {
             let abs_capital = capital_sum.unsigned_abs();
             if capital_sum > 0 {
-                match &state.required_capital_attribute {
+                match state
+                    .required_capital_attributes
+                    .iter()
+                    .find(|requirement| requirement.capital_denom == capital_denom)
+                {
                     None => {
                         let send_capital = BankMsg::Send {
                             to_address: to.clone().unwrap_or(info.sender.clone()).into_string(),
@@ -242,15 +246,15 @@ pub fn try_complete_asset_exchange(
                         };
                         Ok(response.add_message(send_capital))
                     }
-                    Some(required_capital_attribute) => {
+                    Some(requirement) => {
                         let to_addr = to.clone().unwrap_or(info.sender.clone());
                         if !query_attributes(&deps, &to_addr)
-                            .any(|attr| &attr.name == required_capital_attribute)
+                            .any(|attr| attr.name == requirement.required_attribute)
                         {
                             return contract_error(
                                 format!(
                                     "{} does not have required attribute of {}",
-                                    &to_addr, &required_capital_attribute
+                                    &to_addr, &requirement.required_attribute
                                 )
                                 .as_str(),
                             );

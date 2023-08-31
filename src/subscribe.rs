@@ -36,7 +36,7 @@ pub fn try_propose_subscription(
                 like_capital_denoms: state.like_capital_denoms,
                 capital_per_share: state.capital_per_share,
                 initial_commitment,
-                required_capital_attribute: state.required_capital_attribute,
+                required_capital_attributes: state.required_capital_attributes,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -237,6 +237,8 @@ fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
@@ -315,7 +317,7 @@ mod tests {
                 like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             msg
         );
@@ -362,7 +364,7 @@ mod tests {
                 like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             msg
         );

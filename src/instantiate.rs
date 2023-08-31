@@ -1,5 +1,6 @@
 use crate::contract::ContractResponse;
 use crate::error::contract_error;
+use crate::msg::CapitalDenomRequirement;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
 use crate::state::State;
@@ -26,6 +27,14 @@ pub fn instantiate(
         return contract_error("at least 1 like capital denom required");
     }
 
+    if msg.required_capital_attributes.iter().any(
+        |CapitalDenomRequirement { capital_denom, .. }| {
+            !msg.like_capital_denoms.contains(capital_denom)
+        },
+    ) {
+        return contract_error("required capital attributes containing missing cap denom");
+    }
+
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let state = State {
@@ -37,7 +46,7 @@ pub fn instantiate(
         investment_denom: format!("{}.investment", env.contract.address),
         like_capital_denoms: msg.like_capital_denoms,
         capital_per_share: msg.capital_per_share,
-        required_capital_attribute: msg.required_capital_attribute,
+        required_capital_attributes: msg.required_capital_attributes,
     };
 
     config(deps.storage).save(&state)?;
@@ -67,6 +76,8 @@ pub fn instantiate(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
@@ -96,7 +107,7 @@ mod tests {
                 required_attestations: vec![],
                 like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
         )
         .unwrap();
@@ -223,7 +234,7 @@ mod tests {
                 required_attestations: vec![],
                 like_capital_denoms: vec![],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
         );
         assert!(res.is_err());

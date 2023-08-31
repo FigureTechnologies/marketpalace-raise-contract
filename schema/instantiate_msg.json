@@ -7,6 +7,7 @@
     "like_capital_denoms",
     "recovery_admin",
     "required_attestations",
+    "required_capital_attributes",
     "subscription_code_id"
   ],
   "properties": {
@@ -34,11 +35,11 @@
         "uniqueItems": true
       }
     },
-    "required_capital_attribute": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "required_capital_attributes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CapitalDenomRequirement"
+      }
     },
     "subscription_code_id": {
       "type": "integer",
@@ -50,6 +51,21 @@
     "Addr": {
       "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
       "type": "string"
+    },
+    "CapitalDenomRequirement": {
+      "type": "object",
+      "required": [
+        "capital_denom",
+        "required_attribute"
+      ],
+      "properties": {
+        "capital_denom": {
+          "type": "string"
+        },
+        "required_attribute": {
+          "type": "string"
+        }
+      }
     }
   }
 }
