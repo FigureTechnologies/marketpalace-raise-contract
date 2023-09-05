@@ -33,10 +33,10 @@ pub fn try_propose_subscription(
                 lp: info.sender,
                 commitment_denom: state.commitment_denom,
                 investment_denom: state.investment_denom,
-                capital_denom: state.capital_denom,
+                like_capital_denoms: state.like_capital_denoms,
                 capital_per_share: state.capital_per_share,
                 initial_commitment,
-                required_capital_attribute: state.required_capital_attribute,
+                required_capital_attributes: state.required_capital_attributes,
             })?,
             funds: vec![],
             label: String::from("establish subscription"),
@@ -181,6 +181,7 @@ pub fn try_accept_subscriptions(
                         .capital_to_shares(accept.commitment_in_capital)
                         .try_into()?,
                 ),
+                capital_denom: None,
                 capital: None,
                 date: None,
             }],
@@ -236,6 +237,8 @@ fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
@@ -311,10 +314,10 @@ mod tests {
                 lp: Addr::unchecked("lp"),
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             msg
         );
@@ -358,10 +361,10 @@ mod tests {
                 lp: Addr::unchecked("lp"),
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
                 initial_commitment: Some(100),
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
             msg
         );
@@ -439,6 +442,7 @@ mod tests {
                 &vec![AssetExchange {
                     investment: Some(1_000),
                     commitment_in_shares: Some(-1_000),
+                    capital_denom: Some(String::from("stable_coin")),
                     capital: Some(-1_000),
                     date: None,
                 }],
@@ -669,6 +673,7 @@ mod tests {
             &AssetExchange {
                 investment: None,
                 commitment_in_shares: Some(200),
+                capital_denom: None,
                 capital: None,
                 date: None,
             },
@@ -717,6 +722,7 @@ mod tests {
             &AssetExchange {
                 investment: None,
                 commitment_in_shares: Some(200),
+                capital_denom: None,
                 capital: None,
                 date: None,
             },

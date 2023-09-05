@@ -8,7 +8,7 @@ use cosmwasm_storage::{
     Singleton,
 };
 
-use crate::msg::AssetExchange;
+use crate::msg::{AssetExchange, CapitalDenomRequirement};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 
@@ -26,9 +26,9 @@ pub struct State {
     pub required_attestations: Vec<HashSet<String>>,
     pub commitment_denom: String,
     pub investment_denom: String,
-    pub capital_denom: String,
+    pub like_capital_denoms: Vec<String>,
     pub capital_per_share: u64,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }
 
 impl State {
@@ -96,9 +96,9 @@ pub mod tests {
                 required_attestations: vec![vec![String::from("506c")].into_iter().collect()],
                 commitment_denom: String::from("commitment_coin"),
                 investment_denom: String::from("investment_coin"),
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             }
         }
     }

@@ -6,22 +6,46 @@
     "subscription_code_id"
   ],
   "properties": {
-    "capital_denom": {
+    "like_capital_denoms": {
+      "default": null,
       "type": [
-        "string",
+        "array",
         "null"
-      ]
+      ],
+      "items": {
+        "type": "string"
+      }
     },
-    "required_capital_attribute": {
+    "required_capital_attributes": {
       "type": [
-        "string",
+        "array",
         "null"
-      ]
+      ],
+      "items": {
+        "$ref": "#/definitions/CapitalDenomRequirement"
+      }
     },
     "subscription_code_id": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "CapitalDenomRequirement": {
+      "type": "object",
+      "required": [
+        "capital_denom",
+        "required_attribute"
+      ],
+      "properties": {
+        "capital_denom": {
+          "type": "string"
+        },
+        "required_attribute": {
+          "type": "string"
+        }
+      }
     }
   }
 }

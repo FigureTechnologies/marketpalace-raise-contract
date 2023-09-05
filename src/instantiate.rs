@@ -1,4 +1,6 @@
 use crate::contract::ContractResponse;
+use crate::error::contract_error;
+use crate::msg::CapitalDenomRequirement;
 use crate::msg::InstantiateMsg;
 use crate::state::config;
 use crate::state::State;
@@ -21,6 +23,18 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> ContractResponse {
+    if msg.like_capital_denoms.is_empty() {
+        return contract_error("at least 1 like capital denom required");
+    }
+
+    if msg.required_capital_attributes.iter().any(
+        |CapitalDenomRequirement { capital_denom, .. }| {
+            !msg.like_capital_denoms.contains(capital_denom)
+        },
+    ) {
+        return contract_error("required capital attributes containing missing cap denom");
+    }
+
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let state = State {
@@ -30,9 +44,9 @@ pub fn instantiate(
         required_attestations: msg.required_attestations,
         commitment_denom: format!("{}.commitment", env.contract.address),
         investment_denom: format!("{}.investment", env.contract.address),
-        capital_denom: msg.capital_denom,
+        like_capital_denoms: msg.like_capital_denoms,
         capital_per_share: msg.capital_per_share,
-        required_capital_attribute: msg.required_capital_attribute,
+        required_capital_attributes: msg.required_capital_attributes,
     };
 
     config(deps.storage).save(&state)?;
@@ -62,6 +76,8 @@ pub fn instantiate(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;
@@ -89,9 +105,9 @@ mod tests {
                 subscription_code_id: 0,
                 recovery_admin: Addr::unchecked("marketpalace"),
                 required_attestations: vec![],
-                capital_denom: String::from("stable_coin"),
+                like_capital_denoms: vec![String::from("stable_coin")],
                 capital_per_share: 100,
-                required_capital_attribute: None,
+                required_capital_attributes: vec![],
             },
         )
         .unwrap();
@@ -196,7 +212,31 @@ mod tests {
             format!("{}.investment", MOCK_CONTRACT_ADDR),
             state.general.investment_denom
         );
-        assert_eq!("stable_coin", state.general.capital_denom);
+        assert_eq!(
+            "stable_coin",
+            state.general.like_capital_denoms.first().unwrap()
+        );
         assert_eq!(100, state.general.capital_per_share);
+    }
+
+    #[test]
+    fn initialization_without_cap_denoms() {
+        let mut deps = mock_dependencies(&[]);
+        let info = mock_info("gp", &[]);
+
+        let res = instantiate(
+            deps.as_mut(),
+            mock_env(),
+            info,
+            InstantiateMsg {
+                subscription_code_id: 0,
+                recovery_admin: Addr::unchecked("marketpalace"),
+                required_attestations: vec![],
+                like_capital_denoms: vec![],
+                capital_per_share: 100,
+                required_capital_attributes: vec![],
+            },
+        );
+        assert!(res.is_err());
     }
 }

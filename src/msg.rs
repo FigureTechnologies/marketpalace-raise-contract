@@ -11,24 +11,25 @@ pub struct InstantiateMsg {
     pub subscription_code_id: u64,
     pub recovery_admin: Addr,
     pub required_attestations: Vec<HashSet<String>>,
-    pub capital_denom: String,
+    pub like_capital_denoms: Vec<String>,
     pub capital_per_share: u64,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub subscription_code_id: u64,
-    pub capital_denom: Option<String>,
-    pub required_capital_attribute: Option<String>,
+    #[serde(default)]
+    pub like_capital_denoms: Option<Vec<String>>,
+    pub required_capital_attributes: Option<Vec<CapitalDenomRequirement>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SubscriptionMigrateMsg {
-    pub capital_denom: Option<String>,
-    pub required_capital_attribute: Option<String>,
+    pub like_capital_denoms: Vec<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -70,7 +71,14 @@ pub enum HandleMsg {
         to: Addr,
         amount: u64,
         memo: Option<String>,
+        capital_denom: Option<String>,
     },
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct CapitalDenomRequirement {
+    pub capital_denom: String,
+    pub required_attribute: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -95,6 +103,10 @@ pub struct AssetExchange {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub commitment_in_shares: Option<i64>,
+    #[serde(rename = "cap_d")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub capital_denom: Option<String>,
     #[serde(rename = "cap")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
