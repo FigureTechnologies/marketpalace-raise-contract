@@ -126,7 +126,7 @@ mod tests {
     use cosmwasm_storage::{singleton, singleton_read};
     use cw2::set_contract_version;
     use provwasm_mocks::mock_dependencies;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     #[test]
     fn migration() {

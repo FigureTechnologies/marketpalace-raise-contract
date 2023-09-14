@@ -30,7 +30,7 @@ pub struct SubState {
     pub raise: Addr,
     pub commitment_denom: String,
     pub investment_denom: String,
-    pub capital_denom: String,
+    pub like_capital_denoms: Vec<String>,
     pub capital_per_share: u64,
-    pub required_capital_attribute: Option<String>,
+    pub required_capital_attributes: Vec<CapitalDenomRequirement>,
 }

@@ -224,8 +224,6 @@ fn query_attributes(
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashMap;
-
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{coin, SubMsgResponse};
     use cosmwasm_std::{Addr, OwnedDeps};
