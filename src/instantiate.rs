@@ -76,8 +76,6 @@ pub fn instantiate(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
     use crate::mock::marker_msg;
     use crate::mock::msg_at_index;

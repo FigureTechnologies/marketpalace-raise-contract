@@ -237,8 +237,6 @@ fn attributes(deps: Deps<ProvenanceQuery>, lp: &Addr) -> HashSet<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
     use crate::contract::execute;
     use crate::contract::tests::default_deps;
@@ -278,9 +276,9 @@ mod tests {
                     raise: Addr::unchecked("raise_1"),
                     commitment_denom: String::from("raise_1.commitment"),
                     investment_denom: String::from("raise_1.investment"),
-                    capital_denom: String::from("stable_coin"),
+                    like_capital_denoms: vec![String::from("stable_coin")],
                     capital_per_share: 1,
-                    required_capital_attribute: None,
+                    required_capital_attributes: vec![],
                 })
                 .unwrap(),
             ))
