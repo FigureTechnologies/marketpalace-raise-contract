@@ -32,6 +32,7 @@ pub fn migrate(
     let contract_info = get_contract_version(deps.storage)?;
 
     match contract_info.version.as_str() {
+        "2.3.0" => {}
         "2.2.0" | "2.2.1" => {
             let old_state: StateV2_2_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
             let required_capital_attributes =
