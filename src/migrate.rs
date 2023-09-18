@@ -32,7 +32,13 @@ pub fn migrate(
     let contract_info = get_contract_version(deps.storage)?;
 
     match contract_info.version.as_str() {
-        "2.3.0" => {}
+        "2.3.0" | "2.3.1" => {
+            let mut state: State = singleton_read(deps.storage, CONFIG_KEY).load()?;
+
+            state.subscription_code_id = migrate_msg.subscription_code_id;
+
+            config(deps.storage).save(&state)?;
+        }
         "2.2.0" | "2.2.1" => {
             let old_state: StateV2_2_0 = singleton_read(deps.storage, CONFIG_KEY).load()?;
             let required_capital_attributes =
@@ -63,7 +69,10 @@ pub fn migrate(
             config(deps.storage).save(&new_state)?;
         }
         _ => {
-            return contract_error("existing contract version not supported for migration to 2.3.0")
+            return contract_error(&format!(
+                "existing contract version not supported for migration to {}",
+                contract_info.version
+            ));
         }
     };
 
