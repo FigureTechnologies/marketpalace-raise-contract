@@ -14,7 +14,7 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: figure-linux-standard
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -50,7 +50,7 @@ jobs:
           args: '-- --ignore-tests'
   release:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: figure-linux-standard
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: checkout
@@ -67,7 +67,7 @@ jobs:
             artifacts/checksums.txt
   test-release:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: figure-linux-standard
     if: startsWith(github.ref, 'refs/tags/t')
     steps:
       - name: checkout
